@@ -96,7 +96,7 @@ export default function ModelDetail() {
         // Title
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 64px Segoe UI, Roboto, Arial, sans-serif';
-        const title = (model.name || 'Blockfolio Build').slice(0, 40);
+        const title = (model.name || 'Blockprint Build').slice(0, 40);
         ctx.fillText(title, 60, 200);
         // Description
         ctx.font = '28px Segoe UI, Roboto, Arial, sans-serif';
@@ -107,7 +107,7 @@ export default function ModelDetail() {
         ctx.font = 'bold 28px Segoe UI, Roboto, Arial, sans-serif';
         ctx.fillText(author, 60, h - 120);
         ctx.font = 'bold 32px Segoe UI, Roboto, Arial, sans-serif';
-        ctx.fillText('Blockfolio', 60, h - 60);
+        ctx.fillText('Blockprint', 60, h - 60);
         setOgImage(c.toDataURL('image/png'));
       } catch (_) {
         // ignore
@@ -138,8 +138,8 @@ export default function ModelDetail() {
   // Dynamic meta tags for this model
   useEffect(() => {
     if (!model) return;
-    const title = `${model.name} — Blockfolio`;
-    const desc = model.description || 'Minecraft build on Blockfolio';
+    const title = `${model.name} — Blockprint`;
+    const desc = model.description || 'Minecraft build on Blockprint';
     const author = model.credits?.author || undefined;
     const url = typeof window !== 'undefined' ? window.location.href : undefined;
     const image = ogImage || undefined;
@@ -150,7 +150,7 @@ export default function ModelDetail() {
     setNamedMeta('theme-color', '#3b82f6');
     setOG('og:title', title);
     setOG('og:description', desc);
-    setOG('og:site_name', 'Blockfolio');
+    setOG('og:site_name', 'Blockprint');
     setOG('og:type', 'website');
     if (url) setOG('og:url', url);
     if (image) setOG('og:image', image);

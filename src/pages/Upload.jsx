@@ -3,13 +3,13 @@ import React, { useEffect, useState } from 'react';
 export default function Upload() {
   // Meta tags for Upload page
   useEffect(() => {
-    const title = 'Upload a Build — Blockfolio';
-    const desc = 'Submit your Minecraft build for review and publishing on Blockfolio.';
+    const title = 'Upload a Build — Blockprint';
+    const desc = 'Submit your Minecraft build for review and publishing on Blockprint.';
     const url = typeof window !== 'undefined' ? window.location.href : undefined;
     document.title = title;
     setNamedMeta('description', desc);
     setNamedMeta('theme-color', '#3b82f6');
-    setOG('og:title', title); setOG('og:description', desc); setOG('og:site_name', 'Blockfolio'); setOG('og:type', 'website'); if (url) setOG('og:url', url);
+    setOG('og:title', title); setOG('og:description', desc); setOG('og:site_name', 'Blockprint'); setOG('og:type', 'website'); if (url) setOG('og:url', url);
     setTwitter('twitter:card', 'summary'); setTwitter('twitter:title', title); setTwitter('twitter:description', desc);
   }, []);
   function setNamedMeta(name, content) { if (!content) return; let el = document.querySelector(`meta[name="${name}"]`); if (!el) { el = document.createElement('meta'); el.setAttribute('name', name); document.head.appendChild(el); } el.setAttribute('content', String(content)); }

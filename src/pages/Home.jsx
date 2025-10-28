@@ -10,13 +10,13 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   // Meta tags for Home
   useEffect(() => {
-    const title = 'Discover — Blockfolio';
-    const desc = 'Explore and preview Minecraft builds in 3D on Blockfolio.';
+    const title = 'Discover — Blockprint';
+    const desc = 'Explore and preview Minecraft builds in 3D on Blockprint.';
     const url = typeof window !== 'undefined' ? window.location.href : undefined;
     document.title = title;
     setNamedMeta('description', desc);
     setNamedMeta('theme-color', '#3b82f6');
-    setOG('og:title', title); setOG('og:description', desc); setOG('og:site_name', 'Blockfolio'); setOG('og:type', 'website'); if (url) setOG('og:url', url);
+    setOG('og:title', title); setOG('og:description', desc); setOG('og:site_name', 'Blockprint'); setOG('og:type', 'website'); if (url) setOG('og:url', url);
     setTwitter('twitter:card', 'summary'); setTwitter('twitter:title', title); setTwitter('twitter:description', desc);
   }, []);
   function setNamedMeta(name, content) { if (!content) return; let el = document.querySelector(`meta[name="${name}"]`); if (!el) { el = document.createElement('meta'); el.setAttribute('name', name); document.head.appendChild(el); } el.setAttribute('content', String(content)); }

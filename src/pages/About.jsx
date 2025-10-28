@@ -2,13 +2,13 @@ import React, { useEffect } from 'react';
 
 export default function About() {
   useEffect(() => {
-    const title = 'About — Blockfolio';
-    const desc = 'Learn about Blockfolio, a showcase of interactive 3D Minecraft builds.';
+    const title = 'About — Blockprint';
+    const desc = 'Learn about Blockprint, a showcase of interactive 3D Minecraft builds.';
     const url = typeof window !== 'undefined' ? window.location.href : undefined;
     document.title = title;
     setNamedMeta('description', desc);
     setNamedMeta('theme-color', '#3b82f6');
-    setOG('og:title', title); setOG('og:description', desc); setOG('og:site_name', 'Blockfolio'); setOG('og:type', 'website'); if (url) setOG('og:url', url);
+    setOG('og:title', title); setOG('og:description', desc); setOG('og:site_name', 'Blockprint'); setOG('og:type', 'website'); if (url) setOG('og:url', url);
     setTwitter('twitter:card', 'summary'); setTwitter('twitter:title', title); setTwitter('twitter:description', desc);
   }, []);
   function setNamedMeta(name, content) { if (!content) return; let el = document.querySelector(`meta[name="${name}"]`); if (!el) { el = document.createElement('meta'); el.setAttribute('name', name); document.head.appendChild(el); } el.setAttribute('content', String(content)); }
@@ -16,12 +16,12 @@ export default function About() {
   function setTwitter(name, content) { if (!content) return; let el = document.querySelector(`meta[name="${name}"]`); if (!el) { el = document.createElement('meta'); el.setAttribute('name', name); document.head.appendChild(el); } el.setAttribute('content', String(content)); }
   return (
     <div className="page">
-      <h2>About Blockfolio</h2>
+      <h2>About Blockprint</h2>
 
       <section className="panel" style={{ marginTop: 12 }}>
         <div className="panel-head"><strong>What is this?</strong></div>
         <p>
-          Blockfolio is a curated showcase of Minecraft builds with interactive 3D previews (.glb) you can rotate and zoom in your browser.
+          Blockprint is a curated showcase of Minecraft builds with interactive 3D previews (.glb) you can rotate and zoom in your browser.
           Each build has its own detail page, categories, materials list, creator credits, and a downloadable Holoprint pack to help you recreate it in-game.
         </p>
       </section>

@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 
 export default function Privacy() {
   useEffect(() => {
-    document.title = 'Privacy — Blockfolio';
+    document.title = 'Privacy — Blockprint';
   }, []);
   const updated = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
   return (

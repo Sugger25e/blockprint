@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 
 export default function Terms() {
   useEffect(() => {
-    document.title = 'Terms — Blockfolio';
+    document.title = 'Terms — Blockprint';
   }, []);
   const updated = new Date().toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
   return (

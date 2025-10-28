@@ -9,7 +9,7 @@ export default function Navbar() {
   return (
     <header className="navbar">
       <div className="nav-inner">
-        <Link to="/" className="brand">Blockfolio</Link>
+        <Link to="/" className="brand">Blockprint</Link>
         <nav className="nav-links" aria-label="Primary">
           <NavLink to="/" end className={({isActive}) => isActive ? 'active' : undefined}>Home</NavLink>
           <NavLink to="/upload" className={({isActive}) => isActive ? 'active' : undefined}>Upload</NavLink>
