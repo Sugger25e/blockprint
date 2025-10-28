@@ -1,0 +1,18 @@
+{
+  "rewrites": [
+    {
+      "source": "/model/:id",
+      "has": [
+        { "type": "header", "key": "user-agent", "value": ".*(Discordbot|Slackbot|Twitterbot|WhatsApp|TelegramBot|facebookexternalhit|LinkedInBot).*" }
+      ],
+      "destination": "/api/ssr/model/:id"
+    },
+    {
+      "source": "/",
+      "has": [
+        { "type": "header", "key": "user-agent", "value": ".*(Discordbot|Slackbot|Twitterbot|WhatsApp|TelegramBot|facebookexternalhit|LinkedInBot).*" }
+      ],
+      "destination": "/api/ssr/home"
+    }
+  ]
+}
