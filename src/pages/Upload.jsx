@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useAuth } from '../context/AuthContext';
 
 export default function Upload() {
+  const { user, loading, login } = useAuth();
   // Meta tags for Upload page
   useEffect(() => {
     const title = 'Upload a Build — Blockprint';
@@ -20,8 +22,7 @@ export default function Upload() {
   const [description, setDescription] = useState('');
   const [categories, setCategories] = useState([]);
   const [catInput, setCatInput] = useState('');
-  const [author, setAuthor] = useState('');
-  const [socials, setSocials] = useState([{ type: '', url: '' }]);
+  // Credits are derived from your Discord account on the server
   const [glbFile, setGlbFile] = useState(null);
   const [mcstructureFile, setMcstructureFile] = useState(null);
   const [materialsPreview, setMaterialsPreview] = useState([]);
@@ -45,16 +46,12 @@ export default function Upload() {
   };
   const removeCategory = (idx) => setCategories(categories.filter((_, i) => i !== idx));
 
-  const updateSocial = (idx, field, value) => {
-    setSocials(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
-  };
-  const addSocial = () => setSocials(prev => [...prev, { type: '', url: '' }]);
-  const removeSocial = (idx) => setSocials(prev => prev.filter((_, i) => i !== idx));
+  // Social links removed in this flow
 
   const validate = () => {
     const e = {};
     if (!name.trim()) e.name = 'Build name is required';
-    if (!author.trim()) e.author = 'Author is required';
+  // Author comes from your session
     if (!glbFile) e.glb = 'A .glb file is required for the 3D preview';
     if (!mcstructureFile) e.mcstructure = 'A .mcstructure file is required';
     if (categories.length === 0) e.categories = 'Add at least one category';
@@ -76,10 +73,7 @@ export default function Upload() {
     form.append('name', name.trim());
     form.append('description', description.trim());
     categories.forEach(c => form.append('categories', c));
-    if (author || socials.some(s => s.type || s.url)) {
-      const creds = { author: author || undefined, socials: socials.filter(s=>s.type||s.url) };
-      form.append('credits', JSON.stringify(creds));
-    }
+    // credits are derived from the authenticated session server-side
     form.append('glb', glbFile);
     form.append('mcstructure', mcstructureFile);
     // Optionally include client-side materials preview to help backend (server may recompute canonical list)
@@ -87,11 +81,11 @@ export default function Upload() {
       try { form.append('materials', JSON.stringify(materialsPreview)); } catch(_) {}
     }
     try {
-      const res = await fetch(`${API_BASE}/api/submissions`, { method: 'POST', body: form });
+  const res = await fetch(`${API_BASE}/api/submissions`, { method: 'POST', body: form, credentials: 'include' });
       if (!res.ok) throw new Error('Failed');
-      setStatus('success');
-      // reset some fields but keep files visible
-      setName(''); setDescription(''); setCategories([]); setCatInput(''); setAuthor(''); setSocials([{ type: '', url: '' }]);
+  setStatus('success');
+  // reset some fields but keep files visible
+  setName(''); setDescription(''); setCategories([]); setCatInput('');
       setShowSuccess(true);
     } catch (e) {
       setStatus('error');
@@ -312,15 +306,28 @@ export default function Upload() {
     return counts;
   }
 
+  // If not logged in, only show a centered login prompt
+  if (!loading && !user) {
+    return (
+      <div className="page upload-page" style={{ minHeight: 'calc(100dvh - var(--nav-h))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div className="panel" style={{ textAlign: 'center', maxWidth: 480 }}>
+          <h2 style={{ marginTop: 0 }}>Upload a Build</h2>
+          <p className="muted">Please log in with Discord to submit a build.</p>
+          <button className="btn primary" onClick={login}><i className="fa-brands fa-discord" aria-hidden="true"></i> Login with Discord</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="page upload-page">
       <h2>Upload a Build</h2>
 
-      <form className="form-card" onSubmit={onSubmit}>
+      <form className="form-card" onSubmit={onSubmit} aria-disabled={!user}>
         <div className="field-row">
           <div className="field">
             <label>Build name <span className="req">*</span></label>
-            <input className={`input ${submitted && errors.name ? 'input-error' : ''}`} type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Medieval Watchtower" />
+            <input className={`input ${submitted && errors.name ? 'input-error' : ''}`} type="text" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex: Medieval Watchtower" disabled={!user} />
             {submitted && errors.name && <div className="error-text">{errors.name}</div>}
           </div>
         </div>
@@ -328,7 +335,7 @@ export default function Upload() {
         <div className="field-row">
           <div className="field">
             <label>Description</label>
-            <textarea className="textarea" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short description of your build" />
+            <textarea className="textarea" rows={3} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Short description of your build" disabled={!user} />
           </div>
         </div>
 
@@ -343,7 +350,7 @@ export default function Upload() {
                 className="chip-input"
                 type="text"
                 value={catInput}
-                onChange={(e) => setCatInput(e.target.value)}
+                onChange={(e) => setCatInput(e.target.value)} disabled={!user}
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addCategory(); } }}
                 placeholder="Type and press Enter"
               />
@@ -355,13 +362,13 @@ export default function Upload() {
         <div className="field-row two">
           <div className="field">
             <label>.glb file (3D preview) <span className="req">*</span></label>
-            <input className={`input-file ${submitted && errors.glb ? 'input-error' : ''}`} type="file" accept=".glb,.GLB" onChange={(e) => setGlbFile(e.target.files?.[0] || null)} />
+            <input className={`input-file ${submitted && errors.glb ? 'input-error' : ''}`} type="file" accept=".glb,.GLB" onChange={(e) => setGlbFile(e.target.files?.[0] || null)} disabled={!user} />
             {glbFile && <div className="file-meta">{glbFile.name} • {(glbFile.size/1024/1024).toFixed(2)} MB</div>}
             {submitted && errors.glb && <div className="error-text">{errors.glb}</div>}
           </div>
           <div className="field">
             <label>.mcstructure file <span className="req">*</span></label>
-            <input className={`input-file ${submitted && errors.mcstructure ? 'input-error' : ''}`} type="file" accept=".mcstructure" onChange={(e) => setMcstructureFile(e.target.files?.[0] || null)} />
+            <input className={`input-file ${submitted && errors.mcstructure ? 'input-error' : ''}`} type="file" accept=".mcstructure" onChange={(e) => setMcstructureFile(e.target.files?.[0] || null)} disabled={!user} />
             {mcstructureFile && <div className="file-meta">{mcstructureFile.name} • {(mcstructureFile.size/1024/1024).toFixed(2)} MB</div>}
             {submitted && errors.mcstructure && <div className="error-text">{errors.mcstructure}</div>}
             <div className="help">Required for in-game structure placement.</div>
@@ -405,55 +412,14 @@ export default function Upload() {
             )}
           </div>
         )}
-
-        <div className="panel">
-          <div className="panel-head">
-            <strong>Credits</strong>
-          </div>
-          <div className="field-row">
-            <div className="field">
-              <label>Author <span className="req">*</span></label>
-              <input className={`input ${submitted && errors.author ? 'input-error' : ''}`} type="text" value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="Your name or creator name" />
-              {submitted && errors.author && <div className="error-text">{errors.author}</div>}
-            </div>
-          </div>
-          {socials.map((s, idx) => (
-            <div className="field-row two" key={idx}>
-              <div className="field">
-                <label>Platform</label>
-                <select className="input" value={s.type} onChange={(e) => updateSocial(idx, 'type', e.target.value)}>
-                  <option value="">Select…</option>
-                  <option value="YouTube">YouTube</option>
-                  <option value="Instagram">Instagram</option>
-                  <option value="Twitter">Twitter/X</option>
-                  <option value="GitHub">GitHub</option>
-                  <option value="Facebook">Facebook</option>
-                  <option value="TikTok">TikTok</option>
-                  <option value="Discord">Discord</option>
-                  <option value="Link">Other/Link</option>
-                </select>
-              </div>
-              <div className="field">
-                <label>URL</label>
-                <input className="input" type="url" placeholder="https://..." value={s.url} onChange={(e) => updateSocial(idx, 'url', e.target.value)} />
-              </div>
-              <div className="field actions">
-                <button type="button" className="btn" onClick={() => removeSocial(idx)} aria-label="Remove social">Remove</button>
-              </div>
-            </div>
-          ))}
-          <div className="field-row">
-            <button type="button" className="btn" onClick={addSocial}><i className="fa-solid fa-plus" aria-hidden="true"></i> Add social</button>
-            <div className="help">Socials are optional.</div>
-          </div>
-        </div>
+        {/* Credits panel removed; author comes from your Discord account */}
 
         <div className="field-row">
           <button
             className="btn primary"
             type="submit"
-            disabled={isSubmitting || cooldown}
-            aria-disabled={isSubmitting || cooldown}
+            disabled={!user || isSubmitting || cooldown}
+            aria-disabled={!user || isSubmitting || cooldown}
             aria-busy={isSubmitting}
           >
             {isSubmitting ? 'Submitting…' : 'Submit'}

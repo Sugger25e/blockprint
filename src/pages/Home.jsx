@@ -69,7 +69,6 @@ export default function Home() {
             </div>
           )}
         </div>
-        <p className="subtle">Explore and preview builds in 3D.</p>
       </div>
 
       {loading ? (

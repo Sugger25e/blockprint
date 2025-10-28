@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 
 export default function Navbar() {
   const { theme, toggle } = useTheme();
+  const { user, login, loading } = useAuth();
   const [open, setOpen] = useState(false);
   const toggleMenu = () => setOpen(o => !o);
   return (
@@ -14,6 +16,10 @@ export default function Navbar() {
           <NavLink to="/" end className={({isActive}) => isActive ? 'active' : undefined}>Home</NavLink>
           <NavLink to="/upload" className={({isActive}) => isActive ? 'active' : undefined}>Upload</NavLink>
           <NavLink to="/about" className={({isActive}) => isActive ? 'active' : undefined}>About</NavLink>
+          {/* Admin tab only for whitelisted admins */}
+          {!loading && user?.isAdmin && (
+            <NavLink to="/admin" className={({isActive}) => isActive ? 'active' : undefined}>Admin</NavLink>
+          )}
         </nav>
         <div className="nav-right">
           <button
@@ -29,6 +35,21 @@ export default function Navbar() {
               </span>
             </span>
           </button>
+          {!loading && (
+            user ? (
+              <div className="user-menu">
+                <NavLink to="/profile" className="avatar-link" title={user.username} aria-label="Profile">
+                  {user.avatarUrl ? (
+                    <img src={user.avatarUrl} alt="Avatar" width={32} height={32} />
+                  ) : (
+                    <span className="avatar-fallback" aria-hidden="true">{(user.username || '?').charAt(0).toUpperCase()}</span>
+                  )}
+                </NavLink>
+              </div>
+            ) : (
+              <button className="btn small" onClick={login}><i className="fa-brands fa-discord" aria-hidden="true"></i> Login</button>
+            )
+          )}
           <button
             className={`hamburger`}
             aria-label="Menu"
@@ -46,6 +67,14 @@ export default function Navbar() {
         <NavLink to="/" end onClick={()=>setOpen(false)}>Home</NavLink>
         <NavLink to="/upload" onClick={()=>setOpen(false)}>Upload</NavLink>
         <NavLink to="/about" onClick={()=>setOpen(false)}>About</NavLink>
+        {!loading && (user ? (
+          <>
+            <NavLink to="/profile" onClick={()=>setOpen(false)}>My submissions</NavLink>
+            {user.isAdmin && <NavLink to="/admin" onClick={()=>setOpen(false)}>Admin</NavLink>}
+          </>
+        ) : (
+          <button className="btn" onClick={()=>{ setOpen(false); login(); }} style={{ marginTop: 8 }}><i className="fa-brands fa-discord" aria-hidden="true"></i> Login</button>
+        ))}
       </div>
     </header>
   );

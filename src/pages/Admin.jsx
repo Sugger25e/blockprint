@@ -1,28 +1,27 @@
 import React, { useEffect, useRef, useState } from 'react';
 import ModelViewer from '../components/ModelViewer';
 import ModelCard from '../components/ModelCard';
+import { useAuth } from '../context/AuthContext';
+import NotFound from './NotFound';
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
 
 export default function Admin() {
-  const [token, setToken] = useState(localStorage.getItem('admintoken') || '');
-  const authed = !!token;
-  const [form, setForm] = useState({ username: '', password: '' });
-  const [error, setError] = useState('');
+  const { user, loading } = useAuth();
 
   const [subs, setSubs] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [adminLoading, setAdminLoading] = useState(false);
   const [tab, setTab] = useState('submissions');
   const [builds, setBuilds] = useState([]);
   const [drafts, setDrafts] = useState([]);
   const viewerRefs = useRef({});
 
   useEffect(() => {
-    if (!authed) return;
+    if (!user?.isAdmin) return;
     (async () => {
-      setLoading(true);
+      setAdminLoading(true);
       try {
-        const res = await fetch(`${API_BASE}/api/admin/submissions`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch(`${API_BASE}/api/admin/submissions`, { credentials: 'include' });
         const data = await res.json();
         const arr = Array.isArray(data?.submissions) ? data.submissions : [];
         const normalized = arr.map(s => ({
@@ -32,9 +31,9 @@ export default function Admin() {
         }));
         setSubs(normalized);
       } catch (_) {}
-      setLoading(false);
+      setAdminLoading(false);
     })();
-  }, [authed, token]);
+  }, [user]);
 
   const loadBuilds = async () => {
     try {
@@ -52,14 +51,14 @@ export default function Admin() {
     }
   };
   useEffect(() => {
-    if (!authed) return;
+    if (!user?.isAdmin) return;
     if (tab === 'manage') loadBuilds();
     if (tab === 'drafts') loadDrafts();
-  }, [authed, tab]);
+  }, [user, tab]);
 
   const loadDrafts = async () => {
     try {
-      const res = await fetch(`${API_BASE}/api/admin/builds?ready=false`, { headers: { Authorization: `Bearer ${token}` }, cache: 'no-store' });
+  const res = await fetch(`${API_BASE}/api/admin/builds?ready=false`, { credentials: 'include', cache: 'no-store' });
       const data = await res.json();
       const arr = Array.isArray(data?.builds) ? data.builds : [];
       const normalized = arr.map(m => ({
@@ -73,28 +72,16 @@ export default function Admin() {
     } catch (_) { setDrafts([]); }
   };
 
-  const login = async (e) => {
-    e.preventDefault();
-    setError('');
-    try {
-      const res = await fetch(`${API_BASE}/api/admin/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form) });
-      if (!res.ok) throw new Error('Invalid');
-      const data = await res.json();
-      localStorage.setItem('admintoken', data.token);
-      setToken(data.token);
-    } catch (_) {
-      setError('Invalid credentials');
-    }
-  };
+  // Admin login removed; access controlled via Discord ID whitelist on session
 
   const approve = async (id) => {
     if (!window.confirm('Approve this submission? This will go to Drafts tab for verification.')) return;
-    await fetch(`${API_BASE}/api/admin/submissions/${id}/approve`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+  await fetch(`${API_BASE}/api/admin/submissions/${id}/approve`, { method: 'POST', credentials: 'include' });
     setSubs(subs.filter(s => s.id !== id));
   };
   const remove = async (id) => {
     if (!window.confirm('Delete this submission?')) return;
-    await fetch(`${API_BASE}/api/admin/submissions/${id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+  await fetch(`${API_BASE}/api/admin/submissions/${id}`, { method: 'DELETE', credentials: 'include' });
     setSubs(subs.filter(s => s.id !== id));
   };
 
@@ -103,7 +90,7 @@ export default function Admin() {
     if (!window.confirm(`Remove ${label}?`)) return;
     const buildId = build.buildId; // Mongo _id provided by API
     if (!buildId) return;
-    await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(buildId)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+  await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(buildId)}`, { method: 'DELETE', credentials: 'include' });
     setBuilds(prev => prev.filter(b => b.buildId !== buildId));
   };
 
@@ -146,7 +133,7 @@ export default function Admin() {
     }
     if (upGlb) fd.append('glb', upGlb);
     if (upMc) fd.append('mcstructure', upMc);
-    await fetch(`${API_BASE}/api/admin/builds`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+  await fetch(`${API_BASE}/api/admin/builds`, { method: 'POST', credentials: 'include', body: fd });
     setUpName(''); setUpDesc(''); setAdCategories([]); setAdCatInput(''); setUpAuthor(''); setAdSocials([{ type: '', url: '' }]); setUpGlb(null); setUpMc(null); setUpMaterials([]); setUpMatError('');
     alert('Build uploaded');
   };
@@ -327,20 +314,11 @@ export default function Admin() {
     return counts;
   }
 
-  if (!authed) {
-    return (
-      <div className="page admin-page">
-        <div className="admin-card">
-          <h2>Admin Login</h2>
-          <form onSubmit={login} className="admin-form">
-            <label>Username<input className="input" value={form.username} onChange={(e)=>setForm({...form, username: e.target.value})} /></label>
-            <label>Password<input className="input" type="password" value={form.password} onChange={(e)=>setForm({...form, password: e.target.value})} /></label>
-            {error && <div className="error-text" role="alert">{error}</div>}
-            <button className="btn primary" type="submit">Sign in</button>
-          </form>
-        </div>
-      </div>
-    );
+  if (loading) {
+    return <div className="page admin-page"><p className="muted">Loading…</p></div>;
+  }
+  if (!user?.isAdmin) {
+    return <NotFound />;
   }
 
   return (
@@ -352,14 +330,13 @@ export default function Admin() {
           <button className={`tab ${tab==='drafts'?'active':''}`} onClick={()=>setTab('drafts')}>Drafts</button>
           <button className={`tab ${tab==='manage'?'active':''}`} onClick={()=>setTab('manage')}>Manage</button>
           <button className={`tab ${tab==='upload'?'active':''}`} onClick={()=>setTab('upload')}>Upload Build</button>
-          <button className="btn" onClick={()=>{ localStorage.removeItem('admintoken'); setToken(''); }}>Sign out</button>
         </div>
       </div>
 
       {tab==='submissions' && (
         <div className="panel">
           <div className="panel-head"><strong>Pending submissions</strong></div>
-          {loading ? <p className="muted">Loading…</p> : (
+          {adminLoading ? <p className="muted">Loading…</p> : (
             subs.length === 0 ? <p className="muted">No submissions.</p> : (
               <div className="submissions-grid">
                 {subs.map(s => (
@@ -580,7 +557,7 @@ export default function Admin() {
                         if (!file) return;
                         const fd = new FormData();
                         fd.append('holoprint', file);
-                        await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(b.buildId)}/holoprint`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+                        await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(b.buildId)}/holoprint`, { method: 'POST', credentials: 'include', body: fd });
                         loadDrafts();
                       }} />
                       Upload holoprint
@@ -591,11 +568,11 @@ export default function Admin() {
                       const blob = await ref.capture();
                       const fd = new FormData();
                       fd.append('preview', blob, `${b.id || b.buildId || 'preview'}.png`);
-                      await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(b.buildId)}/preview`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+                      await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(b.buildId)}/preview`, { method: 'POST', credentials: 'include', body: fd });
                       loadDrafts();
                     }}>Generate preview</button>
                     <button className="btn primary" disabled={!b.holoprintUrl} title={!b.holoprintUrl ? 'Upload holoprint first' : undefined} onClick={async ()=>{
-                      await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(b.buildId)}/ready`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+                      await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(b.buildId)}/ready`, { method: 'POST', credentials: 'include' });
                       // Move to Manage
                       setDrafts(prev => prev.filter(d => d.buildId !== b.buildId));
                     }}>Ready</button>

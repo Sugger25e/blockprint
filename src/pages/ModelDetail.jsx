@@ -254,10 +254,16 @@ export default function ModelDetail() {
           <ModelViewer url={model.url} allowZoom style={{ height: '70vh', borderRadius: 12 }} modelId={model.id} />
         </div>
         <aside className="detail-side">
-          {model.description && (
-            <p className="detail-desc">{model.description}</p>
+          {model.publishedAt && (
+            <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
+              Published {new Date(model.publishedAt).toLocaleDateString()}
+            </div>
           )}
-          {/* Build Name on right removed per request */}
+
+          <div className="description" style={{ marginBottom: 12 }}>
+            <h3 style={{ margin: '0 0 6px' }}>Description</h3>
+            <p className="detail-desc">{model.description || 'No description provided.'}</p>
+          </div>
 
           {Array.isArray(model.categories) && model.categories.length > 0 && (
             <div className="categories" style={{ marginTop: 12 }}>
@@ -302,7 +308,10 @@ export default function ModelDetail() {
               ) : (
                 <div className="credits-row">
                   {model.credits.author && (
-                    <div className="author">
+                    <div className="author" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {model.credits.avatarUrl && (
+                        <img src={model.credits.avatarUrl} alt="Author avatar" width={28} height={28} style={{ borderRadius: '50%' }} />
+                      )}
                       <span className="author-label">Author:</span>
                       <span className="author-name">{model.credits.author}</span>
                     </div>

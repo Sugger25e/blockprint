@@ -28,6 +28,8 @@ export function ModelsProvider({ children }) {
               sourceType: 'api',
               details: m.details || {},
               buildId: m.buildId || null,
+              publishedAt: m.publishedAt || null,
+              previewImage: m.previewImage ? (m.previewImage.startsWith('http') ? m.previewImage : `${API_BASE}${m.previewImage}`) : null,
             })).filter(m => !!m.url);
             setModels(normalized);
             return;
