@@ -23,7 +23,13 @@ export default function Admin() {
       try {
         const res = await fetch(`${API_BASE}/api/admin/submissions`, { headers: { Authorization: `Bearer ${token}` } });
         const data = await res.json();
-        setSubs(data.submissions || []);
+        const arr = Array.isArray(data?.submissions) ? data.submissions : [];
+        const normalized = arr.map(s => ({
+          ...s,
+          glbUrl: s.glbUrl?.startsWith('http') ? s.glbUrl : `${API_BASE}${s.glbUrl || ''}`,
+          mcstructureUrl: s.mcstructureUrl?.startsWith('http') ? s.mcstructureUrl : `${API_BASE}${s.mcstructureUrl || ''}`,
+        }));
+        setSubs(normalized);
       } catch (_) {}
       setLoading(false);
     })();
@@ -57,6 +63,7 @@ export default function Admin() {
       const normalized = arr.map(m => ({
         ...m,
         url: m.url?.startsWith('http') ? m.url : `${API_BASE}${m.url || ''}`,
+        mcstructureUrl: m.mcstructureUrl ? (m.mcstructureUrl.startsWith('http') ? m.mcstructureUrl : `${API_BASE}${m.mcstructureUrl}`) : null,
         holoprintUrl: m.holoprintUrl ? (m.holoprintUrl.startsWith('http') ? m.holoprintUrl : `${API_BASE}${m.holoprintUrl}`) : null,
       }));
       setDrafts(normalized);
@@ -355,7 +362,7 @@ export default function Admin() {
                 {subs.map(s => (
                   <div className="submission-card" key={s.id}>
                     <div className="submission-viewer">
-                      <ModelViewer url={`${API_BASE}${s.glbUrl}`} fitMargin={4.0} background={'var(--viewer-bg)'} />
+                      <ModelViewer url={s.glbUrl} fitMargin={4.0} background={'var(--viewer-bg)'} />
                     </div>
                     <div className="submission-info">
                       <div className="title">{s.name}</div>
@@ -385,7 +392,7 @@ export default function Admin() {
                         </div>
                       )}
                       <div className="actions">
-                        <a className="btn" href={`${API_BASE}${s.mcstructureUrl}`} download>Download .mcstructure</a>
+                        <a className="btn" href={s.mcstructureUrl} download>Download .mcstructure</a>
                         <button className="btn primary" onClick={()=>approve(s.id)}>Approve</button>
                         <button className="btn" onClick={()=>remove(s.id)}>Delete</button>
                       </div>
@@ -563,7 +570,7 @@ export default function Admin() {
                     )}
                   </div>
                   <div className="model-card-actions" style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                    {b.mcstructureUrl && <a className="btn" href={`${API_BASE}${b.mcstructureUrl}`} download>Download .mcstructure</a>}
+                    {b.mcstructureUrl && <a className="btn" href={b.mcstructureUrl} download>Download .mcstructure</a>}
                     <label className="btn" style={{ position:'relative', overflow:'hidden' }}>
                       <input type="file" accept=".mcpack" style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer' }} onChange={async (e)=>{
                         const file = e.target.files?.[0];
