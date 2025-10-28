@@ -12,6 +12,7 @@ import About from './pages/About';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 import Admin from './pages/Admin';
+import NotFound from './pages/NotFound';
 
 function App() {
   return (
@@ -29,6 +30,7 @@ function App() {
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/model/:id" element={<ModelDetail />} />
                 <Route path="/adm-blckprnt" element={<Admin />} />
+                <Route path="*" element={<NotFound />} />
               </Routes>
             </main>
             <Footer />
