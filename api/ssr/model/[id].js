@@ -18,7 +18,8 @@ export default async function handler(req, res) {
     const model = models.find(m => Number(m.id) === modelId);
 
     const siteName = 'Blockprint';
-    const title = model ? `${model.name} — ${siteName}` : `Model ${modelId} — ${siteName}`;
+  const author = (model && model.credits && model.credits.author) ? model.credits.author : '';
+  const title = model ? `${model.name}${author ? ` by ${author}` : ''} — ${siteName}` : `Model ${modelId} — ${siteName}`;
     const description = (model?.description || 'Discover and share Minecraft builds with materials and downloads.').slice(0, 200);
 
     // Prefer a prepared screenshot if available (convention): /screenshots/glb/<id>.png
@@ -47,6 +48,7 @@ export default async function handler(req, res) {
   <meta property="og:site_name" content="${escapeHtml(siteName)}" />
   <meta property="og:title" content="${escapeHtml(title)}" />
   <meta property="og:description" content="${escapeHtml(description)}" />
+  ${author ? `<meta property=\"article:author\" content=\"${escapeHtml(author)}\" />` : ''}
   <meta property="og:url" content="${escapeHtml(pageUrl)}" />
   <meta property="og:image" content="${escapeHtml(primaryImage)}" />
   <meta property="og:image:alt" content="${escapeHtml(model?.name || siteName)}" />

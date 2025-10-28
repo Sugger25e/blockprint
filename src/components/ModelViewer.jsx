@@ -1,4 +1,4 @@
-import React, { Suspense, useEffect, useRef, useState } from 'react';
+import React, { Suspense, forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import { OrbitControls, useGLTF } from '@react-three/drei';
 import * as THREE from 'three';
@@ -77,18 +77,36 @@ function CameraStateSync({ modelId, saved, setState, controlsRef, loaded }) {
   return null;
 }
 
-export default function ModelViewer({ url, style, allowZoom = true, background = 'var(--viewer-bg)', fitMargin = 4.0, modelId = null }) {
+function ModelViewerImpl({ url, style, allowZoom = true, background = 'var(--viewer-bg)', fitMargin = 4.0, modelId = null }, ref) {
   const [loadedObj, setLoadedObj] = useState(null);
   const controlsRef = useRef();
+  const canvasElRef = useRef(null);
   const { getState, setState } = useViewerState();
   const saved = modelId != null ? getState(modelId) : null;
+
+  // Expose capture API to parent: returns a Blob (PNG) of the canvas
+  useImperativeHandle(ref, () => ({
+    async capture(options = {}) {
+      const el = canvasElRef.current;
+      if (!el) throw new Error('Canvas not ready');
+      const quality = options.quality || 0.92;
+      // toBlob is async and avoids base64 bloat
+      const blob = await new Promise((resolve, reject) => {
+        try {
+          el.toBlob((b) => (b ? resolve(b) : reject(new Error('Capture failed'))), 'image/png', quality);
+        } catch (e) { reject(e); }
+      });
+      return blob;
+    }
+  }), []);
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background, ...style }}>
       <Canvas
         camera={{ fov: 45, near: 0.1, far: 2000 }}
-        gl={{ antialias: true, powerPreference: 'high-performance' }}
+        gl={{ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true }}
         shadows={false}
+        onCreated={({ gl }) => { canvasElRef.current = gl.domElement; }}
       >
             <ambientLight intensity={3.0} />
         <Suspense fallback={null}>
@@ -108,5 +126,8 @@ export default function ModelViewer({ url, style, allowZoom = true, background =
     </div>
   );
 }
+
+const ModelViewer = forwardRef(ModelViewerImpl);
+export default ModelViewer;
 
 useGLTF.preload?.(typeof process !== 'undefined' ? (process.env.PUBLIC_URL + '/models/example.glb') : '/models/example.glb');

@@ -15,6 +15,7 @@ export default function Admin() {
   const [tab, setTab] = useState('submissions');
   const [builds, setBuilds] = useState([]);
   const [drafts, setDrafts] = useState([]);
+  const viewerRefs = useRef({});
 
   useEffect(() => {
     if (!authed) return;
@@ -42,7 +43,8 @@ export default function Admin() {
       const arr = Array.isArray(data?.models) ? data.models : [];
       const normalized = arr.map(m => ({
         ...m,
-        url: m.url?.startsWith('http') ? m.url : `${API_BASE}${m.url || ''}`
+        url: m.url?.startsWith('http') ? m.url : `${API_BASE}${m.url || ''}`,
+        previewImage: m.previewImage && (m.previewImage.startsWith('http') ? m.previewImage : `${API_BASE}${m.previewImage}`)
       }));
       setBuilds(normalized);
     } catch (_) {
@@ -65,6 +67,7 @@ export default function Admin() {
         url: m.url?.startsWith('http') ? m.url : `${API_BASE}${m.url || ''}`,
         mcstructureUrl: m.mcstructureUrl ? (m.mcstructureUrl.startsWith('http') ? m.mcstructureUrl : `${API_BASE}${m.mcstructureUrl}`) : null,
         holoprintUrl: m.holoprintUrl ? (m.holoprintUrl.startsWith('http') ? m.holoprintUrl : `${API_BASE}${m.holoprintUrl}`) : null,
+        previewImageUrl: m.previewImageUrl ? (m.previewImageUrl.startsWith('http') ? m.previewImageUrl : `${API_BASE}${m.previewImageUrl}`) : null,
       }));
       setDrafts(normalized);
     } catch (_) { setDrafts([]); }
@@ -560,7 +563,7 @@ export default function Admin() {
               {drafts.map((b, idx) => (
                 <div key={b.buildId || idx} className="model-card">
                   <div className="model-card-viewer">
-                    <ModelViewer url={b.url} fitMargin={4.0} background={'var(--viewer-bg)'} />
+                    <ModelViewer url={b.url} fitMargin={4.0} background={'var(--viewer-bg)'} ref={(el)=>{ if (el) viewerRefs.current[b.buildId] = el; }} />
                   </div>
                   <div className="model-card-info">
                     <div className="model-card-title">{b.name}</div>
@@ -582,6 +585,15 @@ export default function Admin() {
                       }} />
                       Upload holoprint
                     </label>
+                    <button className="btn" onClick={async ()=>{
+                      const ref = viewerRefs.current[b.buildId];
+                      if (!ref?.capture) return;
+                      const blob = await ref.capture();
+                      const fd = new FormData();
+                      fd.append('preview', blob, `${b.id || b.buildId || 'preview'}.png`);
+                      await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(b.buildId)}/preview`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: fd });
+                      loadDrafts();
+                    }}>Generate preview</button>
                     <button className="btn primary" disabled={!b.holoprintUrl} title={!b.holoprintUrl ? 'Upload holoprint first' : undefined} onClick={async ()=>{
                       await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(b.buildId)}/ready`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
                       // Move to Manage
