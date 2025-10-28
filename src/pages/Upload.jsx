@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 export default function Upload() {
   // Meta tags for Upload page
@@ -32,6 +32,10 @@ export default function Upload() {
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  // Anti-duplicate submit: lock while request is in-flight and keep a short cooldown after
+  const submitLock = useRef(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [cooldown, setCooldown] = useState(false);
 
   const addCategory = () => {
     const val = catInput.trim();
@@ -62,6 +66,10 @@ export default function Upload() {
     e.preventDefault();
     setSubmitted(true);
     if (!validate()) return;
+    // Prevent rapid double clicks before React state updates flush
+    if (submitLock.current || isSubmitting || cooldown) return;
+    submitLock.current = true;
+    setIsSubmitting(true);
     setStatus('submitting');
     const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
     const form = new FormData();
@@ -87,6 +95,12 @@ export default function Upload() {
       setShowSuccess(true);
     } catch (e) {
       setStatus('error');
+    } finally {
+      setIsSubmitting(false);
+      submitLock.current = false;
+      // Short cooldown so the user can't accidentally re-click while UI updates
+      setCooldown(true);
+      setTimeout(() => setCooldown(false), 1200);
     }
   };
 
@@ -435,7 +449,15 @@ export default function Upload() {
         </div>
 
         <div className="field-row">
-          <button className="btn primary" type="submit">upload</button>
+          <button
+            className="btn primary"
+            type="submit"
+            disabled={isSubmitting || cooldown}
+            aria-disabled={isSubmitting || cooldown}
+            aria-busy={isSubmitting}
+          >
+            {isSubmitting ? 'Submitting…' : 'Submit'}
+          </button>
         </div>
       </form>
 

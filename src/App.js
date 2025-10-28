@@ -28,7 +28,7 @@ function App() {
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/privacy" element={<Privacy />} />
                 <Route path="/model/:id" element={<ModelDetail />} />
-                <Route path="/adm-blckfl-login" element={<Admin />} />
+                <Route path="/adm-blckprnt" element={<Admin />} />
               </Routes>
             </main>
             <Footer />
