@@ -8,6 +8,41 @@
       "destination": "/api/ssr/model/:id"
     },
     {
+      "source": "/model/:id",
+      "has": [
+        { "type": "query", "key": "meta", "value": "1" }
+      ],
+      "destination": "/api/ssr/model/:id"
+    },
+    {
+      "source": "/upload",
+      "has": [
+        { "type": "header", "key": "user-agent", "value": ".*(Discordbot|Slackbot|Twitterbot|WhatsApp|TelegramBot|facebookexternalhit|LinkedInBot).*" }
+      ],
+      "destination": "/api/ssr/upload"
+    },
+    {
+      "source": "/terms",
+      "has": [
+        { "type": "header", "key": "user-agent", "value": ".*(Discordbot|Slackbot|Twitterbot|WhatsApp|TelegramBot|facebookexternalhit|LinkedInBot).*" }
+      ],
+      "destination": "/api/ssr/terms"
+    },
+    {
+      "source": "/privacy",
+      "has": [
+        { "type": "header", "key": "user-agent", "value": ".*(Discordbot|Slackbot|Twitterbot|WhatsApp|TelegramBot|facebookexternalhit|LinkedInBot).*" }
+      ],
+      "destination": "/api/ssr/privacy"
+    },
+    {
+      "source": "/about",
+      "has": [
+        { "type": "header", "key": "user-agent", "value": ".*(Discordbot|Slackbot|Twitterbot|WhatsApp|TelegramBot|facebookexternalhit|LinkedInBot).*" }
+      ],
+      "destination": "/api/ssr/about"
+    },
+    {
       "source": "/",
       "has": [
         { "type": "header", "key": "user-agent", "value": ".*(Discordbot|Slackbot|Twitterbot|WhatsApp|TelegramBot|facebookexternalhit|LinkedInBot).*" }

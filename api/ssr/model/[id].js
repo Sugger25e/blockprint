@@ -8,14 +8,17 @@ export default async function handler(req, res) {
     // Detect API base from env; fallback to same origin backend path if proxied
     const API_BASE = process.env.API_BASE || process.env.REACT_APP_API_BASE || `${origin.replace(/\/$/, '')}`;
 
-    const buildsRes = await fetch(`${API_BASE}/api/builds`, { headers: { 'cache-control': 'no-cache' } });
-    const data = buildsRes.ok ? await buildsRes.json() : { models: [] };
-    const models = Array.isArray(data?.models) ? data.models : [];
+    let models = [];
+    try {
+      const buildsRes = await fetch(`${API_BASE}/api/builds`, { headers: { 'cache-control': 'no-cache' } });
+      const data = buildsRes.ok ? await buildsRes.json() : { models: [] };
+      models = Array.isArray(data?.models) ? data.models : [];
+    } catch {}
     const modelId = Number(id);
     const model = models.find(m => Number(m.id) === modelId);
 
     const siteName = 'Blockprint';
-    const title = model ? `${model.name} — ${siteName}` : siteName;
+    const title = model ? `${model.name} — ${siteName}` : `Model ${modelId} — ${siteName}`;
     const description = (model?.description || 'Discover and share Minecraft builds with materials and downloads.').slice(0, 200);
 
     // Prefer a prepared screenshot if available (convention): /screenshots/glb/<id>.png
