@@ -1,0 +1,36 @@
+{
+  "models": [
+    {
+      "id": 101280,
+      "name": "Medieval House",
+      "description": "A cozy wooden house with stone chimney and flower boxes.",
+      "url": "models/yes.glb",
+      "categories": ["Architecture"],
+      "materials": [
+        { "icon": "minecraft:oak_planks", "itemname": "Oak Planks", "amount": 256 },
+        { "icon": "minecraft:cobblestone", "itemname": "Cobblestone", "amount": 192 },
+        { "icon": "minecraft:glass_pane", "itemname": "Glass Pane", "amount": 24 }
+      ],
+      "holoprintUrl": "https://example.com/holoprints/medieval-house.zip",
+      "credits": {
+        "author": "YourName",
+        "socials": [
+          { "type": "Twitter", "url": "https://x.com/yourhandle" },
+          { "type": "YouTube", "url": "https://youtube.com/@yourchannel" }
+      ]
+}
+    },
+    {
+      "id": 2,
+      "name": "Village Center",
+      "description": "A plaza with a fountain and market stalls.",
+      "categories": ["Medieval"],
+      "url": "models/village.glb",
+      "materials": [
+        { "icon": "minecraft:stone_bricks", "itemname": "Stone Bricks", "amount": 480 },
+        { "icon": "minecraft:oak_fence", "itemname": "Oak Fence", "amount": 64 }
+      ],
+      "holoprintUrl": "https://example.com/holoprints/village-center.zip"
+    }
+  ]
+}
