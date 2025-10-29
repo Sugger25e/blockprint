@@ -28,6 +28,10 @@ function App() {
                 <main className="app-main">
                   <Routes>
                     <Route path="/" element={<Home />} />
+                    <Route path="/all" element={<Home />} />
+                    <Route path="/all/:page" element={<Home />} />
+                    <Route path="/:category" element={<Home />} />
+                    <Route path="/:category/:page" element={<Home />} />
                     <Route path="/upload" element={<Upload />} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/about" element={<About />} />

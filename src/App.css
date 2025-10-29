@@ -314,3 +314,14 @@ label { font-weight: 600; color: var(--text); }
 .modal { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 16px; width: min(520px, 92vw); box-shadow: 0 18px 42px rgba(0,0,0,0.18); animation: scaleIn 200ms ease-out both; }
 .modal-head { font-size: 18px; margin-bottom: 6px; }
 @keyframes scaleIn { from { transform: translateY(4px) scale(0.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+
+/* Pager styles and entrance animation */
+.pager { display: flex; gap: 8px; align-items: center; animation: pagerIn 260ms cubic-bezier(.2,.9,.2,1) both; }
+.pager .btn { padding: 8px 10px; min-width: 36px; height: 36px; border-radius: 8px; border: 1px solid var(--border); background: transparent; color: var(--text); }
+.pager .btn:hover { transform: translateY(-2px); }
+/* Active pager: outline/hollow style */
+.pager .btn.pager-active { background: transparent; color: var(--accent); border-color: var(--accent); box-shadow: none; }
+
+/* Pager summary text */
+.pager-summary { color: var(--muted); font-size: 13px; text-align: center; }
+@keyframes pagerIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
