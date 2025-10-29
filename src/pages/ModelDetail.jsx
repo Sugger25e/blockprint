@@ -68,6 +68,9 @@ export default function ModelDetail() {
   const [ogImage, setOgImage] = useState(null);
   const [materialsExpanded, setMaterialsExpanded] = useState(false);
   const [ambientIntensity, setAmbientIntensity] = useState(4.5);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const infoRef = useRef(null);
+  const bubbleRef = useRef(null);
 
   useEffect(() => {
     if (!model) return;
@@ -199,6 +202,73 @@ export default function ModelDetail() {
     }
   }
 
+  // Position and toggle holoprint info bubble for mobile so it appears below the info icon
+  useEffect(() => {
+    const bubble = bubbleRef.current;
+    const infoEl = infoRef.current;
+    if (!bubble || !infoEl) return;
+
+    function positionBubble() {
+      const rect = infoEl.getBoundingClientRect();
+      // Only apply explicit viewport coordinates on small screens where we use fixed positioning
+      if (window.innerWidth <= 600) {
+        // place bubble centered horizontally on the info icon and just below it
+        const desiredCenter = rect.left + rect.width / 2;
+        const bubbleW = bubble.offsetWidth || bubble.getBoundingClientRect().width || 320;
+        const half = bubbleW / 2;
+        const margin = 16; // minimum distance from the viewport edge
+        const minCenter = margin + half;
+        const maxCenter = window.innerWidth - margin - half;
+        const center = Math.max(minCenter, Math.min(maxCenter, desiredCenter));
+        const top = rect.bottom + 8; // 8px gap
+        bubble.style.left = center + 'px';
+        bubble.style.top = top + 'px';
+        // keep translateX(-50%) so left represents the center
+        bubble.style.transform = 'translateX(-50%) translateY(0)';
+      } else {
+        // remove inline positioning so CSS absolute placement takes over on larger screens
+        bubble.style.left = '';
+        bubble.style.top = '';
+        bubble.style.transform = '';
+      }
+    }
+
+    function onKey(e) {
+      if (e.key === 'Escape') setInfoOpen(false);
+    }
+
+    function onDocClick(e) {
+      if (!infoEl.contains(e.target) && !bubble.contains(e.target)) setInfoOpen(false);
+    }
+
+    if (infoOpen) {
+      // show and position
+      bubble.style.visibility = 'visible';
+      bubble.style.opacity = '1';
+      bubble.style.pointerEvents = 'auto';
+      positionBubble();
+      window.addEventListener('resize', positionBubble);
+      window.addEventListener('scroll', positionBubble, true);
+      document.addEventListener('click', onDocClick);
+      document.addEventListener('keydown', onKey);
+    } else {
+      bubble.style.visibility = 'hidden';
+      bubble.style.opacity = '0';
+      bubble.style.pointerEvents = 'none';
+      window.removeEventListener('resize', positionBubble);
+      window.removeEventListener('scroll', positionBubble, true);
+      document.removeEventListener('click', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    }
+
+    return () => {
+      window.removeEventListener('resize', positionBubble);
+      window.removeEventListener('scroll', positionBubble, true);
+      document.removeEventListener('click', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [infoOpen]);
+
   function suggestFileName(m) {
     const base = (m?.name || 'holoprint').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase();
     return `${base}.holoprint.mcpack`;
@@ -213,9 +283,9 @@ export default function ModelDetail() {
             <Link className="back-btn" to="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></Link>
             <h2>Loading…</h2>
           </div>
-          <div className="detail-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 32 }}>
+          <div className="detail-layout" style={{ gap: 32 }}>
             <div>
-              <div style={{ borderRadius: 12, overflow: 'hidden', background: '#000' }}>
+              <div className="detail-viewer" style={{ borderRadius: 12, overflow: 'hidden' }}>
                 <div className="skeleton skeleton-viewer" style={{ height: '70vh' }} aria-hidden="true" />
               </div>
               <div style={{ marginTop: 12 }}>
@@ -271,15 +341,14 @@ export default function ModelDetail() {
         <h2 title={model.name}>{model.name}</h2>
       </div>
 
-<div className="detail-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 32 }}>
+<div className="detail-layout" style={{ gap: 32 }}>
   {/* Left column */}
   <div className="detail-left" style={{ display: 'flex', flexDirection: 'column' }}>
     {/* Model viewer box */}
-    <div style={{ borderRadius: 12, overflow: 'hidden', background: '#000' }}>
+    <div className="detail-viewer" style={{ borderRadius: 12, overflow: 'hidden' }}>
       <ModelViewer
         url={model.url}
         allowZoom
-            style={{ height: '70vh', width: '100%' }}
             ambientIntensity={ambientIntensity}
         modelId={model.id}
       />
@@ -305,9 +374,17 @@ export default function ModelDetail() {
           </div>
       {/* Holoprint */}
       <div className="holoprint">
-        <h3 className="holoprint-title">
-          Holoprint <span className="info" tabIndex={0}><i className="fa-solid fa-circle-info" aria-hidden="true"></i><span className="sr-only">Info</span></span>
-          <span className="info-bubble">A resource pack that displays a hologram of this build in your world to guide construction.</span>
+        <h3 className={`holoprint-title ${infoOpen ? 'is-open' : ''}`}>
+          Holoprint <span
+            className="info"
+            tabIndex={0}
+            ref={infoRef}
+            onClick={(e) => { e.stopPropagation(); setInfoOpen(s => !s); }}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setInfoOpen(s => !s); } }}
+            aria-expanded={infoOpen}
+            aria-controls="holoprint-info"
+          ><i className="fa-solid fa-circle-info" aria-hidden="true"></i><span className="sr-only">Info</span></span>
+          <span id="holoprint-info" ref={bubbleRef} className="info-bubble" role="dialog" aria-hidden={!infoOpen}>A resource pack that displays a hologram of this build in your world to guide construction.</span>
         </h3>
         <div className="actions">
           {model.holoprintUrl ? (
