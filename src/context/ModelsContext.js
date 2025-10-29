@@ -4,10 +4,12 @@ const ModelsContext = createContext(null);
 
 export function ModelsProvider({ children }) {
   const [models, setModels] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
+      setLoading(true);
       try {
         const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
         const res = await fetch(`${API_BASE}/api/builds`, { cache: 'no-store' });
@@ -32,6 +34,7 @@ export function ModelsProvider({ children }) {
               previewImage: m.previewImage ? (m.previewImage.startsWith('http') ? m.previewImage : `${API_BASE}${m.previewImage}`) : null,
             })).filter(m => !!m.url);
             setModels(normalized);
+            setLoading(false);
             return;
           }
         }
@@ -62,15 +65,18 @@ export function ModelsProvider({ children }) {
           };
         }).filter(m => !!m.url);
         setModels(staticModels);
+        setLoading(false);
       } catch (_) {
         // ignore
       }
+      // if we reach here without setting models, still mark loading as finished
+      setLoading(false);
     }
     load();
     return () => { cancelled = true; };
   }, []);
 
-  const value = useMemo(() => ({ models }), [models]);
+  const value = useMemo(() => ({ models, loading }), [models, loading]);
   return (
     <ModelsContext.Provider value={value}>{children}</ModelsContext.Provider>
   );

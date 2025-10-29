@@ -37,6 +37,32 @@
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
     <title>Blockprint</title>
+    <!-- Prevent theme flash: set data-theme from localStorage or system preference before React mounts -->
+    <script>
+      (function() {
+        try {
+          var t = null;
+          try { t = localStorage.getItem('theme'); } catch (e) { t = null; }
+          if (!t) {
+            if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) t = 'dark';
+            else t = 'light';
+          }
+          if (t) {
+            document.documentElement.setAttribute('data-theme', t);
+            // Apply an immediate inline background/color to avoid flash before CSS loads
+            try {
+              if (t === 'dark') {
+                document.documentElement.style.background = '#0f1115';
+                document.documentElement.style.color = '#e6e6e6';
+              } else {
+                document.documentElement.style.background = '#f4f6fb';
+                document.documentElement.style.color = '#0f1115';
+              }
+            } catch (e) { /* ignore */ }
+          }
+        } catch (e) { /* ignore */ }
+      })();
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

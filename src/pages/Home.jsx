@@ -5,9 +5,8 @@ import CategoryPicker from '../components/CategoryPicker';
 import { useGLTF } from '@react-three/drei';
 
 export default function Home() {
-  const { models } = useModels();
+  const { models, loading: modelsLoading } = useModels();
   const [selectedCat, setSelectedCat] = useState('All');
-  const [loading, setLoading] = useState(false);
   // Meta tags for Home
   useEffect(() => {
     const title = 'Discover — Blockprint';
@@ -47,15 +46,13 @@ export default function Home() {
   };
 
   useEffect(() => {
-    // Initial page skeleton + preload all model GLBs
-    setLoading(true);
+    // Preload all model GLBs for faster viewer load. We don't manage the 'loading' UI here;
+    // consumers should use the ModelsContext loading flag to decide whether to show skeletons.
     try {
       models.forEach(m => {
         if (m?.url) useGLTF.preload(m.url);
       });
     } catch (_e) { /* ignore */ }
-    const t = setTimeout(() => setLoading(false), 800);
-    return () => clearTimeout(t);
   }, [models]);
 
   return (
@@ -71,7 +68,7 @@ export default function Home() {
         </div>
       </div>
 
-      {loading ? (
+      {modelsLoading ? (
         <div className="grid fade-in" aria-busy="true" aria-live="polite">
           {Array.from({ length: Math.max(filtered.length, 6) }).map((_, i) => (
             <div key={i} className="model-card">
