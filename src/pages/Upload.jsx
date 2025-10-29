@@ -22,7 +22,8 @@ export default function Upload() {
   const [description, setDescription] = useState('');
   const [authorName, setAuthorName] = useState('');
   const [categories, setCategories] = useState([]);
-  const [catInput, setCatInput] = useState('');
+  // Predefined category options (users must choose from these)
+  const PRESET_CATEGORIES = ['Survival','Creative','Redstone','Farm','Adventure','Building','Decoration','Multiplayer','Hardcore','Mini-Game','Simple'];
   // Credits are derived from your Discord account on the server
   const [glbFile, setGlbFile] = useState(null);
   const [mcstructureFile, setMcstructureFile] = useState(null);
@@ -40,13 +41,15 @@ export default function Upload() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cooldown, setCooldown] = useState(false);
 
-  const addCategory = () => {
-    const val = catInput.trim();
-    if (!val) return;
-    if (!categories.includes(val)) setCategories([...categories, val]);
-    setCatInput('');
+  const toggleCategory = (val) => {
+    if (categories.includes(val)) {
+      setCategories(categories.filter(c => c !== val));
+      return;
+    }
+    // limit to 3
+    if (categories.length >= 3) return;
+    setCategories([...categories, val]);
   };
-  const removeCategory = (idx) => setCategories(categories.filter((_, i) => i !== idx));
 
   // Social links removed in this flow
 
@@ -64,15 +67,8 @@ export default function Upload() {
   const onSubmit = async (e) => {
     e.preventDefault();
     setSubmitted(true);
-    // If the user typed a category but didn't press Enter, include it automatically
-    const trimmedCat = String(catInput || '').trim();
-    let finalCategories = categories.slice();
-    if (trimmedCat && !finalCategories.includes(trimmedCat)) finalCategories = [...finalCategories, trimmedCat];
-    // update local state so the UI shows the applied category
-    if (finalCategories.length !== categories.length) {
-      setCategories(finalCategories);
-      setCatInput('');
-    }
+    // Final categories are the selected preset categories (no free-text input)
+    const finalCategories = categories.slice();
 
     if (!validate(finalCategories)) return;
     // Prevent rapid double clicks before React state updates flush
@@ -99,9 +95,9 @@ export default function Upload() {
     try {
   const res = await fetch(`${API_BASE}/api/submissions`, { method: 'POST', body: form, credentials: 'include' });
       if (!res.ok) throw new Error('Failed');
-  setStatus('success');
+    setStatus('success');
   // reset some fields but keep files visible
-  setName(''); setDescription(''); setCategories([]); setCatInput('');
+  setName(''); setDescription(''); setCategories([]);
       setShowSuccess(true);
     } catch (e) {
       setStatus('error');
@@ -363,17 +359,26 @@ export default function Upload() {
           <div className="field">
             <label>Categories <span className="req">*</span></label>
             <div className={`chips ${submitted && errors.categories ? 'input-error' : ''}`}>
-              {categories.map((c, idx) => (
-                <span className="chip" key={idx}>{c}<button type="button" className="chip-x" onClick={() => removeCategory(idx)} aria-label={`Remove ${c}`}>×</button></span>
-              ))}
-              <input
-                className="chip-input"
-                type="text"
-                value={catInput}
-                onChange={(e) => setCatInput(e.target.value)} disabled={!user}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addCategory(); } }}
-                placeholder="Type and press Enter"
-              />
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {PRESET_CATEGORIES.map((opt) => {
+                  const selected = categories.includes(opt);
+                  const disabled = !selected && categories.length >= 3;
+                  return (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => toggleCategory(opt)}
+                      className={`btn ${selected ? 'primary' : ''}`}
+                      style={{ padding: '6px 10px', borderRadius: 999 }}
+                      disabled={!user || disabled}
+                      aria-pressed={selected}
+                    >
+                      {opt}
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ marginTop: 8 }} className="help">Select up to 3 categories</div>
             </div>
             {submitted && errors.categories && <div className="error-text">{errors.categories}</div>}
           </div>

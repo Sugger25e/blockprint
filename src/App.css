@@ -143,7 +143,7 @@ body, .navbar, .model-card, .detail-viewer, .mobile-menu, .btn, .page, .detail, 
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
 .detail { max-width: 1200px; margin: 0 auto; padding: 24px; }
-.detail-header { display: flex; align-items: center; gap: 16px; }
+.detail-header { display: flex; align-items: center; gap: 16px; margin-bottom: 20px; }
 .detail-header h2 { margin: 0; }
 .back-btn { display: inline-flex; align-items: center; gap: 8px; color: var(--text); text-decoration: none; border: 1px solid var(--border); background: var(--card); padding: 6px 10px; border-radius: 8px; transition: border-color 160ms ease, transform 160ms ease, box-shadow 200ms ease, background-color 200ms ease, color 200ms ease; }
 .back-btn:hover { border-color: var(--accent); transform: translateY(-1px); box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
@@ -324,4 +324,18 @@ label { font-weight: 600; color: var(--text); }
 
 /* Pager summary text */
 .pager-summary { color: var(--muted); font-size: 13px; text-align: center; }
+
+/* Viewer loading spinner */
+.viewer-spinner { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+.spinner-ring { width: 44px; height: 44px; border-radius: 50%; border: 4px solid rgba(0,0,0,0.08); border-top-color: var(--accent); animation: spin 820ms linear infinite; box-shadow: 0 4px 14px rgba(0,0,0,0.08); }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Smaller spinner variant for very small viewers (if needed) */
+@media (max-width: 600px) {
+  .spinner-ring { width: 36px; height: 36px; border-width: 3px; }
+}
+
+/* Ambient intensity control styling in ModelDetail */
+.detail-left .field input[type="range"] { width: 220px; }
+.detail-left .field div { font-variant-numeric: tabular-nums; }
 @keyframes pagerIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }

@@ -77,7 +77,7 @@ function CameraStateSync({ modelId, saved, setState, controlsRef, loaded }) {
   return null;
 }
 
-function ModelViewerImpl({ url, style, allowZoom = true, background = 'var(--viewer-bg)', fitMargin = 1.0, modelId = null }, ref) {
+function ModelViewerImpl({ url, style, allowZoom = true, background = 'var(--viewer-bg)', fitMargin = 1.0, modelId = null, ambientIntensity = 4.5 }, ref) {
   const [loadedObj, setLoadedObj] = useState(null);
   const controlsRef = useRef();
   const canvasElRef = useRef(null);
@@ -102,13 +102,13 @@ function ModelViewerImpl({ url, style, allowZoom = true, background = 'var(--vie
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', background, ...style }}>
-      <Canvas
+  <Canvas
         camera={{ fov: 45, near: 0.1, far: 2000 }}
         gl={{ antialias: true, powerPreference: 'high-performance', preserveDrawingBuffer: true }}
         shadows={false}
         onCreated={({ gl }) => { canvasElRef.current = gl.domElement; }}
       >
-            <ambientLight intensity={4.5} />
+    <ambientLight intensity={ambientIntensity} />
         <Suspense fallback={null}>
           <GLTFModel url={url} onLoaded={(obj) => { setLoadedObj(obj); }} />
         </Suspense>
@@ -123,6 +123,13 @@ function ModelViewerImpl({ url, style, allowZoom = true, background = 'var(--vie
         />
         <CameraStateSync modelId={modelId} saved={saved} setState={setState} controlsRef={controlsRef} loaded={!!loadedObj} />
       </Canvas>
+      {/* Centered spinner while the GLTF hasn't finished loading */}
+      {!loadedObj && (
+        <div className="viewer-spinner" role="status" aria-live="polite">
+          <div className="spinner-ring" aria-hidden="true"></div>
+          <span className="sr-only">Loading model preview</span>
+        </div>
+      )}
     </div>
   );
 }

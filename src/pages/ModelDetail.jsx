@@ -62,11 +62,12 @@ function MaterialRow({ mat }) {
 
 export default function ModelDetail() {
   const { id } = useParams();
-  const { models } = useModels();
+  const { models, loading: modelsLoading } = useModels();
   const idNum = Number(id);
   const model = models.find((m) => Number(m.id) === idNum);
   const [ogImage, setOgImage] = useState(null);
   const [materialsExpanded, setMaterialsExpanded] = useState(false);
+  const [ambientIntensity, setAmbientIntensity] = useState(4.5);
 
   useEffect(() => {
     if (!model) return;
@@ -204,6 +205,38 @@ export default function ModelDetail() {
   }
 
   if (!model) {
+    // If models are still loading, show skeleton placeholders instead of the "not found" state
+    if (modelsLoading) {
+      return (
+        <div className="detail" style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
+          <div className="detail-header">
+            <Link className="back-btn" to="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></Link>
+            <h2>Loading…</h2>
+          </div>
+          <div className="detail-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 32 }}>
+            <div>
+              <div style={{ borderRadius: 12, overflow: 'hidden', background: '#000' }}>
+                <div className="skeleton skeleton-viewer" style={{ height: '70vh' }} aria-hidden="true" />
+              </div>
+              <div style={{ marginTop: 12 }}>
+                <div className="skeleton skeleton-line" style={{ width: '60%' }} aria-hidden="true" />
+                <div className="skeleton skeleton-line" style={{ width: '80%', marginTop: 8 }} aria-hidden="true" />
+                <div className="skeleton skeleton-line" style={{ width: '40%', marginTop: 8 }} aria-hidden="true" />
+              </div>
+            </div>
+            <aside>
+              <div className="skeleton skeleton-text" style={{ width: '100%', height: 56 }} aria-hidden="true" />
+              <div style={{ marginTop: 12 }}>
+                <div className="skeleton skeleton-line" style={{ width: '100%' }} aria-hidden="true" />
+                <div className="skeleton skeleton-line" style={{ width: '90%', marginTop: 8 }} aria-hidden="true" />
+                <div className="skeleton skeleton-line" style={{ width: '70%', marginTop: 8 }} aria-hidden="true" />
+              </div>
+            </aside>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="detail" style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
         <div className="detail-header">
@@ -246,13 +279,30 @@ export default function ModelDetail() {
       <ModelViewer
         url={model.url}
         allowZoom
-        style={{ height: '70vh', width: '100%' }}
+            style={{ height: '70vh', width: '100%' }}
+            ambientIntensity={ambientIntensity}
         modelId={model.id}
       />
     </div>
 
     {/* Holoprint and credits outside the box */}
-    <div style={{ marginTop: 16 }}>
+        <div style={{ marginTop: 16 }}>
+          {/* Ambient intensity control */}
+          <div className="field" style={{ marginBottom: 12 }}>
+            <label style={{ fontSize: 13, fontWeight: 600 }}>Ambient light</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <input
+                type="range"
+                min={0}
+                max={8}
+                step={0.1}
+                value={ambientIntensity}
+                onChange={(e) => setAmbientIntensity(Number(e.target.value))}
+                aria-label="Ambient light intensity"
+              />
+              <div style={{ minWidth: 48, textAlign: 'right', color: 'var(--muted)' }}>{ambientIntensity.toFixed(1)}</div>
+            </div>
+          </div>
       {/* Holoprint */}
       <div className="holoprint">
         <h3 className="holoprint-title">

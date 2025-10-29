@@ -150,12 +150,15 @@ export default function Admin() {
   const [upDesc, setUpDesc] = useState('');
   // Categories (chips) like public Upload
   const [adCategories, setAdCategories] = useState([]);
-  const [adCatInput, setAdCatInput] = useState('');
-  const addCategory = () => {
-    const val = adCatInput.trim();
-    if (!val) return;
-    if (!adCategories.includes(val)) setAdCategories([...adCategories, val]);
-    setAdCatInput('');
+  // Admin uses the same preset category list
+  const PRESET_CATEGORIES = ['Survival','Creative','Redstone','Farm','Adventure','Building','Decoration','Multiplayer','Hardcore','Mini-Game','Simple'];
+  const toggleCategory = (val) => {
+    if (adCategories.includes(val)) {
+      setAdCategories(adCategories.filter(c => c !== val));
+      return;
+    }
+    if (adCategories.length >= 3) return;
+    setAdCategories([...adCategories, val]);
   };
   const removeCategory = (idx) => setAdCategories(adCategories.filter((_, i) => i !== idx));
 
@@ -177,15 +180,8 @@ export default function Admin() {
     if (adminSubmitting) return;
     // mark that admin tried to submit so validation messages show
     setUpSubmitted(true);
-    // If the admin typed a category into the input but didn't press Enter, apply it
-    const trimmedCat = String(adCatInput || '').trim();
-    let finalCategories = adCategories.slice();
-    if (trimmedCat && !finalCategories.includes(trimmedCat)) finalCategories = [...finalCategories, trimmedCat];
-    // update local UI state to reflect applied category
-    if (finalCategories.length !== adCategories.length) {
-      setAdCategories(finalCategories);
-      setAdCatInput('');
-    }
+    // Final categories are the selected preset categories (no free-text input)
+    const finalCategories = adCategories.slice();
 
     // Client-side validation: require name, .glb, .mcstructure, and at least one category
     const errors = {};
@@ -200,8 +196,9 @@ export default function Admin() {
     fd.append('name', upName.trim());
     fd.append('description', String(upDesc || '').trim());
     finalCategories.forEach(c => fd.append('categories', c));
-    // Always set visible author for admin uploads to Blockprint Team and attach an icon
-    const credits = { author: 'Blockprint Team', icon: `${process.env.PUBLIC_URL || ''}/logo.png` };
+  // Always set visible author for admin uploads to Blockprint Team and attach the Blockprint avatar
+  // Backend and ModelDetail expect `credits.avatarUrl` for displaying an author avatar.
+  const credits = { author: 'Blockprint Team', avatarUrl: `${process.env.PUBLIC_URL || ''}/logo.png` };
     fd.append('credits', JSON.stringify(credits));
     if (upGlb) fd.append('glb', upGlb);
     if (upMc) fd.append('mcstructure', upMc);
@@ -222,7 +219,7 @@ export default function Admin() {
           await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(buildId)}/ready`, { method: 'POST', credentials: 'include' });
         } catch (_) {}
       }
-      setUpName(''); setUpDesc(''); setAdCategories([]); setAdCatInput(''); setUpGlb(null); setUpMc(null); setUpHoloprint(null); setUpMaterials([]); setUpMatError('');
+  setUpName(''); setUpDesc(''); setAdCategories([]); setUpGlb(null); setUpMc(null); setUpHoloprint(null); setUpMaterials([]); setUpMatError('');
       setUpSubmitted(false); setUpErrors({});
       alert('Build uploaded');
     } catch (err) {
@@ -514,17 +511,26 @@ export default function Admin() {
             <div className="field">
               <label>Categories <span className="req">*</span></label>
               <div className={`chips ${upSubmitted && upErrors.categories ? 'input-error' : ''}`}>
-                {adCategories.map((c, idx) => (
-                  <span className="chip" key={idx}>{c}<button type="button" className="chip-x" onClick={() => removeCategory(idx)} aria-label={`Remove ${c}`}>×</button></span>
-                ))}
-                <input
-                  className="chip-input"
-                  type="text"
-                  value={adCatInput}
-                  onChange={(e) => setAdCatInput(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); addCategory(); } }}
-                  placeholder="Type and press Enter"
-                />
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  {PRESET_CATEGORIES.map((opt) => {
+                    const selected = adCategories.includes(opt);
+                    const disabled = !selected && adCategories.length >= 3;
+                    return (
+                      <button
+                        key={opt}
+                        type="button"
+                        onClick={() => toggleCategory(opt)}
+                        className={`btn ${selected ? 'primary' : ''}`}
+                        style={{ padding: '6px 10px', borderRadius: 999 }}
+                        disabled={disabled}
+                        aria-pressed={selected}
+                      >
+                        {opt}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ marginTop: 8 }} className="help">Select up to 3 categories</div>
               </div>
               {upSubmitted && upErrors.categories && <div className="error-text">{upErrors.categories}</div>}
             </div>
