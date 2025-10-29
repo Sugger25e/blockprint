@@ -20,10 +20,8 @@ function MaterialRow({ mat }) {
     const imgEl = imgRef.current;
     let timeoutId;
     if (imgEl && imgEl.complete) {
-      // If cached and already complete, finish immediately
       setImgDone(true);
     } else {
-      // Safety timeout to avoid stuck skeletons
       timeoutId = setTimeout(() => setImgDone(true), 5000);
     }
     return () => { if (timeoutId) clearTimeout(timeoutId); };
@@ -68,8 +66,8 @@ export default function ModelDetail() {
   const idNum = Number(id);
   const model = models.find((m) => Number(m.id) === idNum);
   const [ogImage, setOgImage] = useState(null);
+  const [materialsExpanded, setMaterialsExpanded] = useState(false);
 
-  // Try to capture a snapshot of the 3D canvas for social preview; fallback to a branded card
   useEffect(() => {
     if (!model) return;
     let timeout = setTimeout(() => {
@@ -84,39 +82,31 @@ export default function ModelDetail() {
           }
         }
       } catch (_) {}
-      // Fallback: generate a simple branded image
       try {
         const w = 1200, h = 630;
         const c = document.createElement('canvas');
         c.width = w; c.height = h;
         const ctx = c.getContext('2d');
-        // Background primary blue
         ctx.fillStyle = '#3b82f6';
         ctx.fillRect(0, 0, w, h);
-        // Title
         ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 64px Segoe UI, Roboto, Arial, sans-serif';
         const title = (model.name || 'Blockprint Build').slice(0, 40);
         ctx.fillText(title, 60, 200);
-        // Description
         ctx.font = '28px Segoe UI, Roboto, Arial, sans-serif';
         const desc = (model.description || '').slice(0, 140);
         wrapText(ctx, desc, 60, 260, w - 120, 36);
-        // Author and site
         const author = model.credits?.author ? `by ${model.credits.author}` : '';
         ctx.font = 'bold 28px Segoe UI, Roboto, Arial, sans-serif';
         ctx.fillText(author, 60, h - 120);
         ctx.font = 'bold 32px Segoe UI, Roboto, Arial, sans-serif';
         ctx.fillText('Blockprint', 60, h - 60);
         setOgImage(c.toDataURL('image/png'));
-      } catch (_) {
-        // ignore
-      }
+      } catch (_) {}
     }, 1400);
     return () => clearTimeout(timeout);
   }, [model]);
 
-  // Utility: wrap text into multiple lines
   function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     const words = (text || '').split(' ');
     let line = '';
@@ -135,7 +125,6 @@ export default function ModelDetail() {
     ctx.fillText(line, x, y);
   }
 
-  // Dynamic meta tags for this model
   useEffect(() => {
     if (!model) return;
     const title = `${model.name} — Blockprint`;
@@ -158,10 +147,6 @@ export default function ModelDetail() {
     setTwitter('twitter:title', title);
     setTwitter('twitter:description', desc);
     if (image) setTwitter('twitter:image', image);
-
-    return () => {
-      // Optionally clean up or leave tags in place
-    };
   }, [model, ogImage]);
 
   function setNamedMeta(name, content) {
@@ -195,7 +180,6 @@ export default function ModelDetail() {
     el.setAttribute('content', String(content));
   }
 
-  // Prefer blob download to avoid blank-tab navigation and ensure .mcpack saves
   async function downloadHoloprint(url, filename) {
     try {
       const res = await fetch(url, { credentials: 'omit' });
@@ -210,7 +194,6 @@ export default function ModelDetail() {
       a.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
     } catch (_e) {
-      // Fallback: open the URL; the browser may still trigger a download
       try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (_) {}
     }
   }
@@ -243,16 +226,94 @@ export default function ModelDetail() {
     );
   }
 
+  const materials = Array.isArray(model.materials) ? model.materials : [];
+  const showCollapse = materials.length > 8;
+  const visibleMaterials = showCollapse && !materialsExpanded ? materials.slice(0, 8) : materials;
+  const hiddenCount = materials.length - 8;
+
   return (
-    <div className="detail">
+    <div className="detail" style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="detail-header">
         <Link className="back-btn" to="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></Link>
         <h2 title={model.name}>{model.name}</h2>
       </div>
-      <div className="detail-layout">
-        <div className="detail-viewer">
-          <ModelViewer url={model.url} allowZoom style={{ height: '70vh', borderRadius: 12 }} modelId={model.id} />
+
+<div className="detail-layout" style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 32 }}>
+  {/* Left column */}
+  <div className="detail-left" style={{ display: 'flex', flexDirection: 'column' }}>
+    {/* Model viewer box */}
+    <div style={{ borderRadius: 12, overflow: 'hidden', background: '#000' }}>
+      <ModelViewer
+        url={model.url}
+        allowZoom
+        style={{ height: '70vh', width: '100%' }}
+        modelId={model.id}
+      />
+    </div>
+
+    {/* Holoprint and credits outside the box */}
+    <div style={{ marginTop: 16 }}>
+      {/* Holoprint */}
+      <div className="holoprint">
+        <h3 className="holoprint-title">
+          Holoprint <span className="info" tabIndex={0}><i className="fa-solid fa-circle-info" aria-hidden="true"></i><span className="sr-only">Info</span></span>
+          <span className="info-bubble">A resource pack that displays a hologram of this build in your world to guide construction.</span>
+        </h3>
+        <div className="actions">
+          {model.holoprintUrl ? (
+            <button className="btn primary" onClick={() => downloadHoloprint(model.holoprintUrl, suggestFileName(model))}>
+              Download Holoprint
+            </button>
+          ) : (
+            <button className="btn" disabled>Download Holoprint</button>
+          )}
         </div>
+      </div>
+
+      {/* Credits */}
+      {model.credits && (
+              <div className="credits" style={{ marginTop: 12 }}>
+                <h3>Credits</h3>
+                {typeof model.credits === 'string' ? (
+                  <p className="muted credits-row">{model.credits}</p>
+                ) : (
+                  <div className="credits-row">
+                    {model.credits.author && (
+                      <div className="author" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {model.credits.avatarUrl && (
+                          <img src={model.credits.avatarUrl} alt="Author avatar" width={28} height={28} style={{ borderRadius: '50%' }} />
+                        )}
+                        <span className="author-label">Author:</span>
+                        <span className="author-name">{model.credits.author}</span>
+                      </div>
+                    )}
+                    {Array.isArray(model.credits.socials) && model.credits.socials.length > 0 && (
+                      <div className="social-icons" aria-label="Author socials">
+                        {model.credits.socials.map((s, idx) => {
+                          const t = (s.type || '').toLowerCase();
+                          const cls = t === 'twitter' || t === 'x' || t === 'x-twitter' ? 'fa-brands fa-x-twitter'
+                            : t === 'youtube' ? 'fa-brands fa-youtube'
+                            : t === 'instagram' ? 'fa-brands fa-instagram'
+                            : t === 'github' ? 'fa-brands fa-github'
+                            : t === 'facebook' ? 'fa-brands fa-facebook'
+                            : t === 'tiktok' ? 'fa-brands fa-tiktok'
+                            : t === 'discord' ? 'fa-brands fa-discord'
+                            : 'fa-solid fa-link';
+                          return (
+                            <a key={idx} href={s.url} target="_blank" rel="noreferrer" className="social-icon" aria-label={s.type || 'Link'}>
+                              <i className={cls} aria-hidden="true"></i>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
         <aside className="detail-side">
           {model.publishedAt && (
             <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
@@ -278,68 +339,28 @@ export default function ModelDetail() {
 
           <div className="materials">
             <h3>Materials needed</h3>
-            {Array.isArray(model.materials) && model.materials.length > 0 ? (
-              <ul>
-                {model.materials.map((mat, i) => (
-                  <MaterialRow key={i} mat={mat} />
-                ))}
-              </ul>
+            {materials.length > 0 ? (
+              <>
+                <ul>
+                  {visibleMaterials.map((mat, i) => (
+                    <MaterialRow key={i} mat={mat} />
+                  ))}
+                </ul>
+                {showCollapse && !materialsExpanded && (
+                  <button className="btn" style={{ marginTop: 8 }} onClick={() => setMaterialsExpanded(true)}>
+                    ...{hiddenCount} more items, view more
+                  </button>
+                )}
+                {showCollapse && materialsExpanded && (
+                  <button className="btn" style={{ marginTop: 8 }} onClick={() => setMaterialsExpanded(false)}>
+                    Show less
+                  </button>
+                )}
+              </>
             ) : (
               <p className="muted">No materials list provided.</p>
             )}
           </div>
-
-          <div className="holoprint">
-            <h3 className="holoprint-title">Holoprint <span className="info" tabIndex={0}><i className="fa-solid fa-circle-info" aria-hidden="true"></i><span className="sr-only">Info</span></span><span className="info-bubble">A resource pack that displays a hologram of this build in your world to guide construction.</span></h3>
-            <div className="actions">
-              {model.holoprintUrl ? (
-                <button className="btn primary" onClick={() => downloadHoloprint(model.holoprintUrl, suggestFileName(model))}>Download Holoprint</button>
-              ) : (
-                <button className="btn" disabled>Download Holoprint</button>
-              )}
-            </div>
-          </div>
-
-          {model.credits && (
-            <div className="credits">
-              <h3>Credits</h3>
-              {typeof model.credits === 'string' ? (
-                <p className="muted credits-row">{model.credits}</p>
-              ) : (
-                <div className="credits-row">
-                  {model.credits.author && (
-                    <div className="author" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      {model.credits.avatarUrl && (
-                        <img src={model.credits.avatarUrl} alt="Author avatar" width={28} height={28} style={{ borderRadius: '50%' }} />
-                      )}
-                      <span className="author-label">Author:</span>
-                      <span className="author-name">{model.credits.author}</span>
-                    </div>
-                  )}
-                  {Array.isArray(model.credits.socials) && model.credits.socials.length > 0 && (
-                    <div className="social-icons" aria-label="Author socials">
-                      {model.credits.socials.map((s, idx) => {
-                        const t = (s.type || '').toLowerCase();
-                        const cls = t === 'twitter' || t === 'x' || t === 'x-twitter' ? 'fa-brands fa-x-twitter'
-                          : t === 'youtube' ? 'fa-brands fa-youtube'
-                          : t === 'instagram' ? 'fa-brands fa-instagram'
-                          : t === 'github' ? 'fa-brands fa-github'
-                          : t === 'facebook' ? 'fa-brands fa-facebook'
-                          : t === 'tiktok' ? 'fa-brands fa-tiktok'
-                          : t === 'discord' ? 'fa-brands fa-discord'
-                          : 'fa-solid fa-link';
-                        return (
-                          <a key={idx} href={s.url} target="_blank" rel="noreferrer" className="social-icon" aria-label={s.type || 'Link'}>
-                            <i className={cls} aria-hidden="true"></i>
-                          </a>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
         </aside>
       </div>
     </div>

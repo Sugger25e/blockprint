@@ -20,6 +20,7 @@ export default function Upload() {
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [authorName, setAuthorName] = useState('');
   const [categories, setCategories] = useState([]);
   const [catInput, setCatInput] = useState('');
   // Credits are derived from your Discord account on the server
@@ -29,6 +30,7 @@ export default function Upload() {
   const [materialsLoading, setMaterialsLoading] = useState(false);
   const [materialsError, setMaterialsError] = useState('');
   const [aliases, setAliases] = useState({});
+  const [materialsOpen, setMaterialsOpen] = useState(false);
   const [status, setStatus] = useState('idle');
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
@@ -48,13 +50,13 @@ export default function Upload() {
 
   // Social links removed in this flow
 
-  const validate = () => {
+  const validate = (cats = categories) => {
     const e = {};
     if (!name.trim()) e.name = 'Build name is required';
-  // Author comes from your session
+    // Author is optional (can be provided here) — otherwise credits come from your session
     if (!glbFile) e.glb = 'A .glb file is required for the 3D preview';
     if (!mcstructureFile) e.mcstructure = 'A .mcstructure file is required';
-    if (categories.length === 0) e.categories = 'Add at least one category';
+    if (!Array.isArray(cats) || cats.length === 0) e.categories = 'Add at least one category';
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -62,17 +64,31 @@ export default function Upload() {
   const onSubmit = async (e) => {
     e.preventDefault();
     setSubmitted(true);
-    if (!validate()) return;
+    // If the user typed a category but didn't press Enter, include it automatically
+    const trimmedCat = String(catInput || '').trim();
+    let finalCategories = categories.slice();
+    if (trimmedCat && !finalCategories.includes(trimmedCat)) finalCategories = [...finalCategories, trimmedCat];
+    // update local state so the UI shows the applied category
+    if (finalCategories.length !== categories.length) {
+      setCategories(finalCategories);
+      setCatInput('');
+    }
+
+    if (!validate(finalCategories)) return;
     // Prevent rapid double clicks before React state updates flush
     if (submitLock.current || isSubmitting || cooldown) return;
     submitLock.current = true;
     setIsSubmitting(true);
     setStatus('submitting');
-    const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
+    const API_BASE = process.env.REACT_APP_API_BASE;
     const form = new FormData();
     form.append('name', name.trim());
     form.append('description', description.trim());
-    categories.forEach(c => form.append('categories', c));
+    finalCategories.forEach(c => form.append('categories', c));
+    // Include optional author name provided in the form (frontend-provided override)
+    if (authorName && String(authorName).trim()) {
+      form.append('author', String(authorName).trim());
+    }
     // credits are derived from the authenticated session server-side
     form.append('glb', glbFile);
     form.append('mcstructure', mcstructureFile);
@@ -228,6 +244,8 @@ export default function Upload() {
     return () => { aborted = true; };
   }, [mcstructureFile]);
 
+  // NOTE: panel height is handled by CSS now (fixed max-height with internal scrollbar)
+
   function stripNs(s) { return String(s).replace(/^minecraft:/,''); }
   function titleCase(s) {
     return String(s)
@@ -339,6 +357,8 @@ export default function Upload() {
           </div>
         </div>
 
+        
+
         <div className="field-row">
           <div className="field">
             <label>Categories <span className="req">*</span></label>
@@ -375,44 +395,70 @@ export default function Upload() {
           </div>
         </div>
 
-        {(mcstructureFile || materialsLoading || materialsError || materialsPreview.length>0) && (
+        {/* Materials preview panel: collapsed by default, toggle to expand */}
+  {(mcstructureFile) && (
           <div className="panel" style={{ marginTop: 12 }}>
-            <div className="panel-head"><strong>Materials (preview)</strong></div>
-            {materialsLoading && <p className="muted">Analyzing .mcstructure…</p>}
-            {!materialsLoading && materialsError && (
-              <p className="muted">{materialsError} The final list will be computed after upload.</p>
-            )}
-            {!materialsLoading && !materialsError && materialsPreview.length === 0 && (
-              <p className="muted">No materials detected in this file.</p>
-            )}
-            {!materialsLoading && !materialsError && materialsPreview.length>0 && (
-              <ul style={{ margin: 0, paddingLeft: 18, columns: 2, columnGap: 24 }}>
-                {materialsPreview.map((m,i)=> {
-                  const id = (m.icon || '').replace(/^minecraft:/, '');
-                  const iconUrl = id ? `https://mc.nerothe.com/img/1.21.8/minecraft_${id}.png` : '';
-                  return (
-                    <li key={i} style={{ breakInside: 'avoid', display: 'flex', alignItems: 'center', gap: 8, lineHeight: 1.3 }}>
-                      {iconUrl && (
-                        <img
-                          src={iconUrl}
-                          alt={m.itemname}
-                          width={20}
-                          height={20}
-                          loading="lazy"
-                          style={{ display: 'inline-block', borderRadius: 4, background: 'rgba(0,0,0,0.06)' }}
-                          onError={(e)=>{ e.currentTarget.style.display = 'none'; }}
-                        />
-                      )}
-                      <span style={{ flex: 1 }}>{m.itemname}</span>
-                      <span style={{ opacity: 0.8 }}>× {m.amount}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
+            <div
+              className="panel-head"
+              role="button"
+              tabIndex={0}
+              onClick={() => setMaterialsOpen(o => !o)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMaterialsOpen(o => !o); } }}
+              aria-expanded={materialsOpen}
+              aria-controls="materials-panel"
+            >
+              <strong>Materials (preview)</strong>
+              <span className="toggle-materials" aria-hidden="true" style={{ marginLeft: 'auto', pointerEvents: 'none' }}>
+                <i className={`fa-solid fa-chevron-right ${materialsOpen ? 'is-open' : ''}`} aria-hidden="true"></i>
+              </span>
+            </div>
+
+            <div id="materials-panel" className={`panel-body ${materialsOpen ? 'is-open' : ''}`} aria-hidden={!materialsOpen}>
+              {materialsLoading && <p className="muted">Analyzing .mcstructure…</p>}
+              {!materialsLoading && materialsError && (
+                <p className="muted">{materialsError} The final list will be computed after upload.</p>
+              )}
+              {!materialsLoading && !materialsError && materialsPreview.length === 0 && (
+                <p className="muted">No materials detected in this file.</p>
+              )}
+              {!materialsLoading && !materialsError && materialsPreview.length>0 && (
+                <ul className="materials-list">
+                  {materialsPreview.map((m,i)=> {
+                    const id = (m.icon || '').replace(/^minecraft:/, '');
+                    const iconUrl = id ? `https://mc.nerothe.com/img/1.21.8/minecraft_${id}.png` : '';
+                    return (
+                      <li key={i} style={{ breakInside: 'avoid', display: 'flex', alignItems: 'center', gap: 8, lineHeight: 1.3 }}>
+                        {iconUrl && (
+                          <img
+                            src={iconUrl}
+                            alt={m.itemname}
+                            width={20}
+                            height={20}
+                            loading="lazy"
+                            style={{ display: 'inline-block', borderRadius: 4, background: 'rgba(0,0,0,0.06)' }}
+                            onError={(e)=>{ e.currentTarget.style.display = 'none'; }}
+                          />
+                        )}
+                        <span style={{ flex: 1 }}>{m.itemname}</span>
+                        <span style={{ opacity: 0.8 }}>× {m.amount}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </div>
         )}
         {/* Credits panel removed; author comes from your Discord account */}
+
+        {/* Optional author field moved to bottom so it's the last input the user sees */}
+        <div className="field-row">
+          <div className="field">
+            <label>Author (optional)</label>
+            <input className="input" type="text" value={authorName} onChange={(e) => setAuthorName(e.target.value)} placeholder="Your name" disabled={!user} />
+            <div className="help">If provided, this will be used as the visible author instead of the Discord username.</div>
+          </div>
+        </div>
 
         <div className="field-row">
           <button

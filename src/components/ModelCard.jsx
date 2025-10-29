@@ -4,6 +4,8 @@ import ModelViewer from './ModelViewer';
 
 export default function ModelCard({ model, actionLabel, onAction }) {
   const { id, name, description, url, categories } = model;
+  // derive author from model.credits which may be a string or an object
+  const author = typeof model.credits === 'string' ? model.credits : model.credits?.author;
   const navigate = useNavigate();
 
   return (
@@ -14,6 +16,7 @@ export default function ModelCard({ model, actionLabel, onAction }) {
       <div className="model-card-info">
         <div>
           <div className="model-card-title" title={name}>{name}</div>
+          {author && <div className="model-card-author muted">by {author}</div>}
           {description && <div className="model-card-desc" title={description}>{description}</div>}
           {Array.isArray(categories) && categories.length > 0 && (
             <div className="tags">

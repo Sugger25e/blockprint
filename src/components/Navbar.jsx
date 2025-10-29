@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -8,14 +8,30 @@ export default function Navbar() {
   const { user, login, loading } = useAuth();
   const [open, setOpen] = useState(false);
   const toggleMenu = () => setOpen(o => !o);
+  const location = useLocation();
+  const onAdminLeaveNavigate = (cb) => {
+    // Previously we forced a page reload when leaving /admin to refresh content.
+    // That caused flashes and theme flicker. Instead just run the callback here
+    // and let each page handle its own data refresh when mounted or navigated to.
+    // If we are leaving /admin, emit a small event so pages can optionally refresh.
+    try {
+      if (location.pathname.startsWith('/admin')) {
+        window.dispatchEvent(new CustomEvent('admin:navigate-away'));
+      }
+    } catch (_) {}
+    cb && cb();
+  };
   return (
     <header className="navbar">
       <div className="nav-inner">
-        <Link to="/" className="brand">Blockprint</Link>
+        <Link to="/" className="brand">
+          <img src={process.env.PUBLIC_URL + '/logo.png'} alt="Blockprint" className="brand-logo" />
+          <span className="brand-text">Blockprint</span>
+        </Link>
         <nav className="nav-links" aria-label="Primary">
-          <NavLink to="/" end className={({isActive}) => isActive ? 'active' : undefined}>Home</NavLink>
-          <NavLink to="/upload" className={({isActive}) => isActive ? 'active' : undefined}>Upload</NavLink>
-          <NavLink to="/about" className={({isActive}) => isActive ? 'active' : undefined}>About</NavLink>
+          <NavLink to="/" end className={({isActive}) => isActive ? 'active' : undefined} onClick={() => onAdminLeaveNavigate()}>Home</NavLink>
+          <NavLink to="/upload" className={({isActive}) => isActive ? 'active' : undefined} onClick={() => onAdminLeaveNavigate()}>Upload</NavLink>
+          <NavLink to="/about" className={({isActive}) => isActive ? 'active' : undefined} onClick={() => onAdminLeaveNavigate()}>About</NavLink>
           {/* Admin tab only for whitelisted admins */}
           {!loading && user?.isAdmin && (
             <NavLink to="/admin" className={({isActive}) => isActive ? 'active' : undefined}>Admin</NavLink>
@@ -64,13 +80,13 @@ export default function Navbar() {
         </div>
       </div>
       <div id="mobile-menu" className={`mobile-menu ${open ? 'open' : ''}`}>
-        <NavLink to="/" end onClick={()=>setOpen(false)}>Home</NavLink>
-        <NavLink to="/upload" onClick={()=>setOpen(false)}>Upload</NavLink>
-        <NavLink to="/about" onClick={()=>setOpen(false)}>About</NavLink>
+        <NavLink to="/" end onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>Home</NavLink>
+  <NavLink to="/upload" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>Upload</NavLink>
+        <NavLink to="/about" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>About</NavLink>
         {!loading && (user ? (
           <>
-            <NavLink to="/profile" onClick={()=>setOpen(false)}>My submissions</NavLink>
-            {user.isAdmin && <NavLink to="/admin" onClick={()=>setOpen(false)}>Admin</NavLink>}
+            <NavLink to="/profile" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>My submissions</NavLink>
+            {user.isAdmin && <NavLink to="/admin" onClick={()=>{ setOpen(false); }}>Admin</NavLink>}
           </>
         ) : (
           <button className="btn" onClick={()=>{ setOpen(false); login(); }} style={{ marginTop: 8 }}><i className="fa-brands fa-discord" aria-hidden="true"></i> Login</button>

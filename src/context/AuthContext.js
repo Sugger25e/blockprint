@@ -9,9 +9,7 @@ export function AuthProvider({ children }) {
   // Use explicit API base if provided; otherwise:
   // - In local dev, default to localhost:4000
   // - In production, default to relative base ('') so requests go to /api on the same origin
-  const isLocalhost = typeof window !== 'undefined' && /^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname);
-  const API_BASE = (process.env.REACT_APP_API_BASE && process.env.REACT_APP_API_BASE.trim())
-    || (isLocalhost ? 'http://localhost:4000' : '');
+  const API_BASE = process.env.REACT_APP_API_BASE;
 
   useEffect(() => {
     let cancelled = false;
@@ -30,9 +28,7 @@ export function AuthProvider({ children }) {
   }, [API_BASE]);
 
   const login = () => {
-    // Redirect to backend Discord OAuth start; cookie will be set and user redirected back
-    const base = API_BASE || '';
-    window.location.href = `${base}/api/auth/discord`;
+    window.location.href = `${API_BASE}/api/auth/discord`;
   };
 
   const logout = async () => {

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import ModelViewer from '../components/ModelViewer';
 import ModelCard from '../components/ModelCard';
 import { useAuth } from '../context/AuthContext';
@@ -11,13 +12,21 @@ export default function Admin() {
 
   const [subs, setSubs] = useState([]);
   const [adminLoading, setAdminLoading] = useState(false);
-  const [tab, setTab] = useState('submissions');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [tab, setTab] = useState(() => {
+    const t = searchParams.get('tab');
+    return t || 'submissions';
+  });
   const [builds, setBuilds] = useState([]);
+  const [buildsLoading, setBuildsLoading] = useState(false);
   const [drafts, setDrafts] = useState([]);
+  const [draftsLoading, setDraftsLoading] = useState(false);
   const viewerRefs = useRef({});
 
   useEffect(() => {
+    // load submissions when requested (or on mount if default tab)
     if (!user?.isAdmin) return;
+    if (tab !== 'submissions') return;
     (async () => {
       setAdminLoading(true);
       try {
@@ -33,9 +42,30 @@ export default function Admin() {
       } catch (_) {}
       setAdminLoading(false);
     })();
-  }, [user]);
+  }, [user, tab]);
+
+  // expose an explicit loader so other interactions can refresh submissions
+  const loadSubs = async () => {
+    if (!user?.isAdmin) return;
+    setAdminLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/submissions`, { credentials: 'include' });
+      const data = await res.json();
+      const arr = Array.isArray(data?.submissions) ? data.submissions : [];
+      const normalized = arr.map(s => ({
+        ...s,
+        glbUrl: s.glbUrl?.startsWith('http') ? s.glbUrl : `${API_BASE}${s.glbUrl || ''}`,
+        mcstructureUrl: s.mcstructureUrl?.startsWith('http') ? s.mcstructureUrl : `${API_BASE}${s.mcstructureUrl || ''}`,
+      }));
+      setSubs(normalized);
+    } catch (_) {
+      setSubs([]);
+    }
+    setAdminLoading(false);
+  };
 
   const loadBuilds = async () => {
+    setBuildsLoading(true);
     try {
       const res = await fetch(`${API_BASE}/api/builds`, { cache: 'no-store' });
       const data = await res.json();
@@ -49,6 +79,7 @@ export default function Admin() {
     } catch (_) {
       setBuilds([]);
     }
+    setBuildsLoading(false);
   };
   useEffect(() => {
     if (!user?.isAdmin) return;
@@ -56,7 +87,27 @@ export default function Admin() {
     if (tab === 'drafts') loadDrafts();
   }, [user, tab]);
 
+  // Keep tab in sync with URL search params (so back/forward preserves selection)
+  useEffect(() => {
+    const t = searchParams.get('tab');
+    if (t && t !== tab) setTab(t);
+  }, [searchParams]);
+
+  // Central tab setter that updates the URL and triggers loaders (no full reload)
+  const handleSetTab = (t) => {
+    // normalize allowed tabs
+    const allowed = ['submissions', 'drafts', 'manage', 'upload'];
+    const target = allowed.includes(t) ? t : 'submissions';
+    setTab(target);
+    try { setSearchParams({ tab: target }); } catch (_) {}
+    // trigger immediate reload of the tab's data
+    if (target === 'submissions') loadSubs();
+    if (target === 'manage') loadBuilds();
+    if (target === 'drafts') loadDrafts();
+  };
+
   const loadDrafts = async () => {
+    setDraftsLoading(true);
     try {
   const res = await fetch(`${API_BASE}/api/admin/builds?ready=false`, { credentials: 'include', cache: 'no-store' });
       const data = await res.json();
@@ -70,6 +121,7 @@ export default function Admin() {
       }));
       setDrafts(normalized);
     } catch (_) { setDrafts([]); }
+    setDraftsLoading(false);
   };
 
   // Admin login removed; access controlled via Discord ID whitelist on session
@@ -107,35 +159,77 @@ export default function Admin() {
   };
   const removeCategory = (idx) => setAdCategories(adCategories.filter((_, i) => i !== idx));
 
-  // Credits (socials list) like public Upload
-  const [upAuthor, setUpAuthor] = useState('');
-  const [adSocials, setAdSocials] = useState([{ type: '', url: '' }]);
-  const updateSocial = (idx, field, value) => {
-    setAdSocials(prev => prev.map((s, i) => i === idx ? { ...s, [field]: value } : s));
-  };
-  const addSocial = () => setAdSocials(prev => [...prev, { type: '', url: '' }]);
-  const removeSocial = (idx) => setAdSocials(prev => prev.filter((_, i) => i !== idx));
+  // Admin uploads do not accept custom credits — author is set to Blockprint Team.
   const [upGlb, setUpGlb] = useState(null);
   const [upMc, setUpMc] = useState(null);
+  const [upHoloprint, setUpHoloprint] = useState(null);
+  const [adminSubmitting, setAdminSubmitting] = useState(false);
+  // Admin upload validation state
+  const [upSubmitted, setUpSubmitted] = useState(false);
+  const [upErrors, setUpErrors] = useState({});
   const [upMaterials, setUpMaterials] = useState([]);
   const [upMatLoading, setUpMatLoading] = useState(false);
   const [upMatError, setUpMatError] = useState('');
+  const [upMaterialsOpen, setUpMaterialsOpen] = useState(false);
   const [aliasesMap, setAliasesMap] = useState({});
   const uploadDirect = async (e) => {
     e.preventDefault();
-    const fd = new FormData();
-    fd.append('name', upName);
-    fd.append('description', upDesc);
-    adCategories.forEach(c => fd.append('categories', c));
-    if (upAuthor || adSocials.some(s => s.type || s.url)) {
-      const socials = adSocials.filter(s => s.type || s.url);
-      fd.append('credits', JSON.stringify({ author: upAuthor || undefined, socials }));
+    if (adminSubmitting) return;
+    // mark that admin tried to submit so validation messages show
+    setUpSubmitted(true);
+    // If the admin typed a category into the input but didn't press Enter, apply it
+    const trimmedCat = String(adCatInput || '').trim();
+    let finalCategories = adCategories.slice();
+    if (trimmedCat && !finalCategories.includes(trimmedCat)) finalCategories = [...finalCategories, trimmedCat];
+    // update local UI state to reflect applied category
+    if (finalCategories.length !== adCategories.length) {
+      setAdCategories(finalCategories);
+      setAdCatInput('');
     }
+
+    // Client-side validation: require name, .glb, .mcstructure, and at least one category
+    const errors = {};
+    if (!upName || !String(upName).trim()) errors.name = 'Build name is required';
+    if (!upGlb) errors.glb = 'A .glb file is required';
+    if (!upMc) errors.mc = 'A .mcstructure file is required';
+    if (!Array.isArray(finalCategories) || finalCategories.length === 0) errors.categories = 'Add at least one category';
+    setUpErrors(errors);
+    if (Object.keys(errors).length > 0) return; // don't start submitting while required fields missing
+
+    const fd = new FormData();
+    fd.append('name', upName.trim());
+    fd.append('description', String(upDesc || '').trim());
+    finalCategories.forEach(c => fd.append('categories', c));
+    // Always set visible author for admin uploads to Blockprint Team and attach an icon
+    const credits = { author: 'Blockprint Team', icon: `${process.env.PUBLIC_URL || ''}/logo.png` };
+    fd.append('credits', JSON.stringify(credits));
     if (upGlb) fd.append('glb', upGlb);
     if (upMc) fd.append('mcstructure', upMc);
-  await fetch(`${API_BASE}/api/admin/builds`, { method: 'POST', credentials: 'include', body: fd });
-    setUpName(''); setUpDesc(''); setAdCategories([]); setAdCatInput(''); setUpAuthor(''); setAdSocials([{ type: '', url: '' }]); setUpGlb(null); setUpMc(null); setUpMaterials([]); setUpMatError('');
-    alert('Build uploaded');
+    // optionally include a holoprint file uploaded by admin
+    if (upHoloprint) fd.append('holoprint', upHoloprint);
+    // Always mark admin uploads as ready/published
+    fd.append('ready', 'true');
+    try {
+      setAdminSubmitting(true);
+      const res = await fetch(`${API_BASE}/api/admin/builds`, { method: 'POST', credentials: 'include', body: fd });
+      if (!res.ok) throw new Error('Upload failed');
+      // try to parse returned build id and mark ready if server didn't via 'ready' flag
+      let data = {};
+      try { data = await res.json(); } catch(_) { data = {}; }
+      const buildId = data?.buildId || data?.id || data?.build?.buildId || data?.build?.id;
+      if (buildId) {
+        try {
+          await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(buildId)}/ready`, { method: 'POST', credentials: 'include' });
+        } catch (_) {}
+      }
+      setUpName(''); setUpDesc(''); setAdCategories([]); setAdCatInput(''); setUpGlb(null); setUpMc(null); setUpHoloprint(null); setUpMaterials([]); setUpMatError('');
+      setUpSubmitted(false); setUpErrors({});
+      alert('Build uploaded');
+    } catch (err) {
+      alert(err?.message || 'Upload failed');
+    } finally {
+      setAdminSubmitting(false);
+    }
   };
 
   // Fetch aliases for consistent preview formatting (same as Upload page)
@@ -326,61 +420,75 @@ export default function Admin() {
       <div className="admin-head">
         <h2>Admin</h2>
         <div className="tabs">
-          <button className={`tab ${tab==='submissions'?'active':''}`} onClick={()=>setTab('submissions')}>Submissions</button>
-          <button className={`tab ${tab==='drafts'?'active':''}`} onClick={()=>setTab('drafts')}>Drafts</button>
-          <button className={`tab ${tab==='manage'?'active':''}`} onClick={()=>setTab('manage')}>Manage</button>
-          <button className={`tab ${tab==='upload'?'active':''}`} onClick={()=>setTab('upload')}>Upload Build</button>
+          {/* Tabs now update the URL search param and trigger the appropriate data loaders instead of reloading the page */}
+          <button className={`tab ${tab==='submissions'?'active':''}`} onClick={() => handleSetTab('submissions')}>Submissions</button>
+          <button className={`tab ${tab==='drafts'?'active':''}`} onClick={() => handleSetTab('drafts')}>Drafts</button>
+          <button className={`tab ${tab==='manage'?'active':''}`} onClick={() => handleSetTab('manage')}>Manage</button>
+          <button className={`tab ${tab==='upload'?'active':''}`} onClick={() => handleSetTab('upload')}>Upload Build</button>
         </div>
       </div>
 
       {tab==='submissions' && (
         <div className="panel">
           <div className="panel-head"><strong>Pending submissions</strong></div>
-          {adminLoading ? <p className="muted">Loading…</p> : (
-            subs.length === 0 ? <p className="muted">No submissions.</p> : (
-              <div className="submissions-grid">
-                {subs.map(s => (
-                  <div className="submission-card" key={s.id}>
-                    <div className="submission-viewer">
-                      <ModelViewer url={s.glbUrl} fitMargin={4.0} background={'var(--viewer-bg)'} />
-                    </div>
-                    <div className="submission-info">
-                      <div className="title">{s.name}</div>
-                      <div className="muted">by {s.credits?.author || 'Unknown'}</div>
-                      <div className="desc">{s.description}</div>
-                      <div className="tags">{(s.categories||[]).map((c,i)=>(<span key={i} className="tag">{c}</span>))}</div>
-                      {Array.isArray(s.materials) && s.materials.length > 0 && (
-                        <div className="materials" style={{ marginTop: 8 }}>
-                          <div className="muted" style={{ marginBottom: 4 }}>Materials needed</div>
-                          <ul style={{ margin: 0, paddingLeft: 18, columns: 2, columnGap: 24 }}>
-                            {s.materials.slice(0, 24).map((m, i) => {
-                              const id = (m.icon || '').replace(/^minecraft:/, '');
-                              const iconUrl = id ? `https://mc.nerothe.com/img/1.21.8/minecraft_${id}.png` : '';
-                              return (
-                                <li key={i} style={{ breakInside: 'avoid', display:'flex', alignItems:'center', gap:8 }}>
-                                  {iconUrl && (
-                                    <img src={iconUrl} alt={m.itemname} width={18} height={18} loading="lazy"
-                                         style={{ display: 'inline-block', background: 'rgba(0,0,0,0.06)', borderRadius: 3 }}
-                                         onError={(e)=>{ e.currentTarget.style.display = 'none'; }} />
-                                  )}
-                                  <span style={{ flex: 1 }}>{m.itemname}</span>
-                                  <span style={{ opacity: 0.8 }}>× {m.amount}</span>
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        </div>
-                      )}
-                      <div className="actions">
-                        <a className="btn" href={s.mcstructureUrl} download>Download .mcstructure</a>
-                        <button className="btn primary" onClick={()=>approve(s.id)}>Approve</button>
-                        <button className="btn" onClick={()=>remove(s.id)}>Delete</button>
+          {adminLoading && (
+            <div className="submissions-grid">
+              {Array.from({length:4}).map((_,i)=>(
+                <div key={i} className="submission-card">
+                  <div className="submission-viewer skeleton skeleton-viewer" />
+                  <div className="submission-info">
+                    <div className="skeleton skeleton-line" style={{ width: '60%' }} />
+                    <div className="skeleton skeleton-line" style={{ width: '40%', marginTop: 8 }} />
+                    <div className="skeleton skeleton-line" style={{ width: '80%', marginTop: 10 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {!adminLoading && subs.length === 0 && <p className="muted">No submissions.</p>}
+          {!adminLoading && subs.length > 0 && (
+            <div className="submissions-grid">
+              {subs.map(s => (
+                <div className="submission-card" key={s.id}>
+                  <div className="submission-viewer">
+                    <ModelViewer url={s.glbUrl} fitMargin={4.0} background={'var(--viewer-bg)'} />
+                  </div>
+                  <div className="submission-info">
+                    <div className="title">{s.name}</div>
+                    <div className="muted">by {s.credits?.author || 'Unknown'}</div>
+                    <div className="desc">{s.description}</div>
+                    <div className="tags">{(s.categories||[]).map((c,i)=>(<span key={i} className="tag">{c}</span>))}</div>
+                    {Array.isArray(s.materials) && s.materials.length > 0 && (
+                      <div className="materials" style={{ marginTop: 8 }}>
+                        <div className="muted" style={{ marginBottom: 4 }}>Materials needed</div>
+                        <ul style={{ margin: 0, paddingLeft: 18, columns: 2, columnGap: 24 }}>
+                          {s.materials.slice(0, 24).map((m, i) => {
+                            const id = (m.icon || '').replace(/^minecraft:/, '');
+                            const iconUrl = id ? `https://mc.nerothe.com/img/1.21.8/minecraft_${id}.png` : '';
+                            return (
+                              <li key={i} style={{ breakInside: 'avoid', display:'flex', alignItems:'center', gap:8 }}>
+                                {iconUrl && (
+                                  <img src={iconUrl} alt={m.itemname} width={18} height={18} loading="lazy"
+                                       style={{ display: 'inline-block', background: 'rgba(0,0,0,0.06)', borderRadius: 3 }}
+                                       onError={(e)=>{ e.currentTarget.style.display = 'none'; }} />
+                                )}
+                                <span style={{ flex: 1 }}>{m.itemname}</span>
+                                <span style={{ opacity: 0.8 }}>× {m.amount}</span>
+                              </li>
+                            );
+                          })}
+                        </ul>
                       </div>
+                    )}
+                    <div className="actions">
+                      <a className="btn" href={s.mcstructureUrl} download>Download .mcstructure</a>
+                      <button className="btn primary" onClick={()=>approve(s.id)}>Approve</button>
+                      <button className="btn" onClick={()=>remove(s.id)}>Delete</button>
                     </div>
                   </div>
-                ))}
-              </div>
-            )
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
@@ -389,8 +497,9 @@ export default function Admin() {
         <form onSubmit={uploadDirect} className="form-card">
           <div className="field-row">
             <div className="field">
-              <label>Build name</label>
-              <input className="input" type="text" value={upName} onChange={(e)=>setUpName(e.target.value)} placeholder="Ex: Medieval Watchtower" />
+              <label>Build name <span className="req">*</span></label>
+              <input className={`input ${upSubmitted && upErrors.name ? 'input-error' : ''}`} type="text" value={upName} onChange={(e)=>setUpName(e.target.value)} placeholder="Ex: Medieval Watchtower" />
+              {upSubmitted && upErrors.name && <div className="error-text">{upErrors.name}</div>}
             </div>
           </div>
 
@@ -403,8 +512,8 @@ export default function Admin() {
 
           <div className="field-row">
             <div className="field">
-              <label>Categories</label>
-              <div className="chips">
+              <label>Categories <span className="req">*</span></label>
+              <div className={`chips ${upSubmitted && upErrors.categories ? 'input-error' : ''}`}>
                 {adCategories.map((c, idx) => (
                   <span className="chip" key={idx}>{c}<button type="button" className="chip-x" onClick={() => removeCategory(idx)} aria-label={`Remove ${c}`}>×</button></span>
                 ))}
@@ -417,18 +526,21 @@ export default function Admin() {
                   placeholder="Type and press Enter"
                 />
               </div>
+              {upSubmitted && upErrors.categories && <div className="error-text">{upErrors.categories}</div>}
             </div>
           </div>
 
           <div className="field-row two">
             <div className="field">
-              <label>.glb file (3D preview)</label>
-              <input className="input-file" type="file" accept=".glb,.GLB" onChange={(e)=>setUpGlb(e.target.files?.[0]||null)} />
+              <label>.glb file (3D preview) <span className="req">*</span></label>
+              <input className={`input-file ${upSubmitted && upErrors.glb ? 'input-error' : ''}`} type="file" accept=".glb,.GLB" onChange={(e)=>setUpGlb(e.target.files?.[0]||null)} />
+              {upSubmitted && upErrors.glb && <div className="error-text">{upErrors.glb}</div>}
               {upGlb && <div className="file-meta">{upGlb.name} • {(upGlb.size/1024/1024).toFixed(2)} MB</div>}
             </div>
             <div className="field">
-              <label>.mcstructure file</label>
-              <input className="input-file" type="file" accept=".mcstructure" onChange={(e)=>setUpMc(e.target.files?.[0]||null)} />
+              <label>.mcstructure file <span className="req">*</span></label>
+              <input className={`input-file ${upSubmitted && upErrors.mc ? 'input-error' : ''}`} type="file" accept=".mcstructure" onChange={(e)=>setUpMc(e.target.files?.[0]||null)} />
+              {upSubmitted && upErrors.mc && <div className="error-text">{upErrors.mc}</div>}
               {upMc && <div className="file-meta">{upMc.name} • {(upMc.size/1024/1024).toFixed(2)} MB</div>}
               <div className="help">Required for in-game structure placement.</div>
             </div>
@@ -436,78 +548,69 @@ export default function Admin() {
 
           {(upMc || upMatLoading || upMatError || upMaterials.length>0) && (
             <div className="panel" style={{ marginTop: 12 }}>
-              <div className="panel-head"><strong>Materials (preview)</strong></div>
-              {upMatLoading && <p className="muted">Analyzing .mcstructure…</p>}
-              {!upMatLoading && upMatError && (
-                <p className="muted">{upMatError} The final list will be computed after upload.</p>
-              )}
-              {!upMatLoading && !upMatError && upMaterials.length === 0 && (
-                <p className="muted">No materials detected in this file.</p>
-              )}
-              {!upMatLoading && !upMatError && upMaterials.length>0 && (
-                <ul style={{ margin: 0, paddingLeft: 18, columns: 2, columnGap: 24 }}>
-                  {upMaterials.map((m,i)=>{
-                    const id = (m.icon||'').replace(/^minecraft:/,'');
-                    const iconUrl = id ? `https://mc.nerothe.com/img/1.21.8/minecraft_${id}.png` : '';
-                    return (
-                      <li key={i} style={{ breakInside:'avoid', display:'flex', alignItems:'center', gap:8, lineHeight:1.3 }}>
-                        {iconUrl && (
-                          <img src={iconUrl} alt={m.itemname} width={18} height={18} loading="lazy"
-                               style={{ display:'inline-block', background:'rgba(0,0,0,0.06)', borderRadius:3 }}
-                               onError={(e)=>{ e.currentTarget.style.display='none'; }} />
-                        )}
-                        <span style={{ flex:1 }}>{m.itemname}</span>
-                        <span style={{ opacity:0.8 }}>× {m.amount}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
+              <div
+                className="panel-head"
+                role="button"
+                tabIndex={0}
+                onClick={() => setUpMaterialsOpen(o => !o)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setUpMaterialsOpen(o => !o); } }}
+                aria-expanded={upMaterialsOpen}
+                aria-controls="admin-materials-panel"
+              >
+                <strong>Materials (preview)</strong>
+                <span className="toggle-materials" aria-hidden="true" style={{ marginLeft: 'auto', pointerEvents: 'none' }}>
+                  <i className={`fa-solid fa-chevron-right ${upMaterialsOpen ? 'is-open' : ''}`} aria-hidden="true"></i>
+                </span>
+              </div>
+
+              <div id="admin-materials-panel" className={`panel-body ${upMaterialsOpen ? 'is-open' : ''}`} aria-hidden={!upMaterialsOpen}>
+                {upMatLoading && <p className="muted">Analyzing .mcstructure…</p>}
+                {!upMatLoading && upMatError && (
+                  <p className="muted">{upMatError} The final list will be computed after upload.</p>
+                )}
+                {!upMatLoading && !upMatError && upMaterials.length === 0 && (
+                  <p className="muted">No materials detected in this file.</p>
+                )}
+                {!upMatLoading && !upMatError && upMaterials.length>0 && (
+                  <ul className="materials-list">
+                    {upMaterials.map((m,i)=>{
+                      const id = (m.icon||'').replace(/^minecraft:/,'');
+                      const iconUrl = id ? `https://mc.nerothe.com/img/1.21.8/minecraft_${id}.png` : '';
+                      return (
+                        <li key={i} style={{ breakInside:'avoid', display:'flex', alignItems:'center', gap:8, lineHeight:1.3 }}>
+                          {iconUrl && (
+                            <img src={iconUrl} alt={m.itemname} width={20} height={20} loading="lazy"
+                                 style={{ display:'inline-block', borderRadius:4, background:'rgba(0,0,0,0.06)' }}
+                                 onError={(e)=>{ e.currentTarget.style.display='none'; }} />
+                          )}
+                          <span style={{ flex:1 }}>{m.itemname}</span>
+                          <span style={{ opacity:0.8 }}>× {m.amount}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
             </div>
           )}
 
-          <div className="panel" style={{ marginTop: 8 }}>
-            <div className="panel-head">
-              <strong>Credits</strong> <span className="muted">(optional)</span>
-            </div>
-            <div className="field-row">
-              <div className="field">
-                <label>Author</label>
-                <input className="input" value={upAuthor} onChange={(e)=>setUpAuthor(e.target.value)} placeholder="Creator name" />
-              </div>
-            </div>
-            {adSocials.map((s, idx) => (
-              <div className="field-row two" key={idx}>
-                <div className="field">
-                  <label>Platform</label>
-                  <select className="input" value={s.type} onChange={(e) => updateSocial(idx, 'type', e.target.value)}>
-                    <option value="">Select…</option>
-                    <option value="YouTube">YouTube</option>
-                    <option value="Instagram">Instagram</option>
-                    <option value="Twitter">Twitter/X</option>
-                    <option value="GitHub">GitHub</option>
-                    <option value="Facebook">Facebook</option>
-                    <option value="TikTok">TikTok</option>
-                    <option value="Discord">Discord</option>
-                    <option value="Link">Other/Link</option>
-                  </select>
-                </div>
-                <div className="field">
-                  <label>URL</label>
-                  <input className="input" type="url" placeholder="https://..." value={s.url} onChange={(e) => updateSocial(idx, 'url', e.target.value)} />
-                </div>
-                <div className="field actions">
-                  <button type="button" className="btn" onClick={() => removeSocial(idx)} aria-label="Remove social">Remove</button>
-                </div>
-              </div>
-            ))}
-            <div className="field-row">
-              <button type="button" className="btn" onClick={addSocial}><i className="fa-solid fa-plus" aria-hidden="true"></i> Add social</button>
+          {/* No credits input for admin uploads; credits are set automatically. */}
+
+          <div className="field-row">
+            <div className="field">
+              <label>Holoprint (.mcpack) <span className="req">*</span></label>
+              <input className={`input-file ${upSubmitted && upErrors.holoprint ? 'input-error' : ''}`} type="file" accept=".mcpack" onChange={(e)=>setUpHoloprint(e.target.files?.[0]||null)} />
+              {upSubmitted && upErrors.holoprint && <div className="error-text">{upErrors.holoprint}</div>}
+              {upHoloprint && <div className="file-meta">{upHoloprint.name} • {(upHoloprint.size/1024/1024).toFixed(2)} MB</div>}
             </div>
           </div>
 
+          {/* Admin uploads are published automatically; no publish checkbox needed */}
+
           <div className="field-row">
-            <button className="btn primary" type="submit">Upload</button>
+            <button className="btn primary" type="submit" disabled={adminSubmitting} aria-busy={adminSubmitting}>
+              {adminSubmitting ? 'Submitting…' : 'Submit'}
+            </button>
           </div>
         </form>
       )}
@@ -515,9 +618,21 @@ export default function Admin() {
       {tab==='manage' && (
         <div className="panel">
           <div className="panel-head"><strong>Published builds</strong></div>
-          {builds.length === 0 ? (
-            <p className="muted">No builds yet.</p>
-          ) : (
+          {buildsLoading && (
+            <div className="grid">
+              {Array.from({length:6}).map((_,i)=> (
+                <div key={i} className="model-card">
+                  <div className="model-card-viewer skeleton skeleton-viewer" />
+                  <div className="model-card-info">
+                    <div className="skeleton skeleton-line" style={{ width: '60%' }} />
+                    <div className="skeleton skeleton-line" style={{ width: '40%', marginTop: 8 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {!buildsLoading && builds.length === 0 && <p className="muted">No builds yet.</p>}
+          {!buildsLoading && builds.length > 0 && (
             <div className="grid fade-in">
               {builds.map((m) => (
                 <div key={m.buildId || m.id}>
@@ -533,9 +648,21 @@ export default function Admin() {
       {tab==='drafts' && (
         <div className="panel">
           <div className="panel-head"><strong>Draft builds (not yet on Discover)</strong></div>
-          {drafts.length === 0 ? (
-            <p className="muted">No drafts yet.</p>
-          ) : (
+          {draftsLoading && (
+            <div className="grid">
+              {Array.from({length:4}).map((_,i)=> (
+                <div key={i} className="model-card">
+                  <div className="model-card-viewer skeleton skeleton-viewer" />
+                  <div className="model-card-info">
+                    <div className="skeleton skeleton-line" style={{ width: '60%' }} />
+                    <div className="skeleton skeleton-line" style={{ width: '40%', marginTop: 8 }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {!draftsLoading && drafts.length === 0 && <p className="muted">No drafts yet.</p>}
+          {!draftsLoading && drafts.length > 0 && (
             <div className="grid fade-in">
               {drafts.map((b, idx) => (
                 <div key={b.buildId || idx} className="model-card">

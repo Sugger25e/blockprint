@@ -77,7 +77,7 @@ function CameraStateSync({ modelId, saved, setState, controlsRef, loaded }) {
   return null;
 }
 
-function ModelViewerImpl({ url, style, allowZoom = true, background = 'var(--viewer-bg)', fitMargin = 4.0, modelId = null }, ref) {
+function ModelViewerImpl({ url, style, allowZoom = true, background = 'var(--viewer-bg)', fitMargin = 1.0, modelId = null }, ref) {
   const [loadedObj, setLoadedObj] = useState(null);
   const controlsRef = useRef();
   const canvasElRef = useRef(null);
@@ -108,7 +108,7 @@ function ModelViewerImpl({ url, style, allowZoom = true, background = 'var(--vie
         shadows={false}
         onCreated={({ gl }) => { canvasElRef.current = gl.domElement; }}
       >
-            <ambientLight intensity={3.0} />
+            <ambientLight intensity={4.5} />
         <Suspense fallback={null}>
           <GLTFModel url={url} onLoaded={(obj) => { setLoadedObj(obj); }} />
         </Suspense>
