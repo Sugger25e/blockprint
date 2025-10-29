@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import ModelViewer from '../components/ModelViewer';
 
 export default function Upload() {
   const { user, loading, login } = useAuth();
@@ -36,6 +37,21 @@ export default function Upload() {
   const [errors, setErrors] = useState({});
   const [submitted, setSubmitted] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+
+  // Preview URL for selected .glb file (object URL). Created when a file is selected and revoked on change/unmount.
+  const [glbPreviewUrl, setGlbPreviewUrl] = useState(null);
+  useEffect(() => {
+    if (!glbFile) {
+      setGlbPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(glbFile);
+    setGlbPreviewUrl(url);
+    return () => {
+      try { URL.revokeObjectURL(url); } catch (e) {}
+      setGlbPreviewUrl(null);
+    };
+  }, [glbFile]);
   // Anti-duplicate submit: lock while request is in-flight and keep a short cooldown after
   const submitLock = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -384,13 +400,22 @@ export default function Upload() {
           </div>
         </div>
 
-        <div className="field-row two">
+        <div className="field-row">
           <div className="field">
             <label>.glb file (3D preview) <span className="req">*</span></label>
             <input className={`input-file ${submitted && errors.glb ? 'input-error' : ''}`} type="file" accept=".glb,.GLB" onChange={(e) => setGlbFile(e.target.files?.[0] || null)} disabled={!user} />
             {glbFile && <div className="file-meta">{glbFile.name} • {(glbFile.size/1024/1024).toFixed(2)} MB</div>}
             {submitted && errors.glb && <div className="error-text">{errors.glb}</div>}
+            {/* Inline preview of the selected .glb file */}
+            {glbPreviewUrl && (
+              <div className="glb-preview" style={{ marginTop: 12 }}>
+                <ModelViewer url={glbPreviewUrl} fitMargin={1.0} background={'var(--viewer-bg)'} />
+              </div>
+            )}
           </div>
+        </div>
+
+        <div className="field-row">
           <div className="field">
             <label>.mcstructure file <span className="req">*</span></label>
             <input className={`input-file ${submitted && errors.mcstructure ? 'input-error' : ''}`} type="file" accept=".mcstructure" onChange={(e) => setMcstructureFile(e.target.files?.[0] || null)} disabled={!user} />

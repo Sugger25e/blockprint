@@ -21,6 +21,7 @@ export default function Admin() {
   const [buildsLoading, setBuildsLoading] = useState(false);
   const [drafts, setDrafts] = useState([]);
   const [draftsLoading, setDraftsLoading] = useState(false);
+  const [draftPage, setDraftPage] = useState(0); // pagination: index of currently visible draft
   const viewerRefs = useRef({});
 
   useEffect(() => {
@@ -120,9 +121,159 @@ export default function Admin() {
         previewImageUrl: m.previewImageUrl ? (m.previewImageUrl.startsWith('http') ? m.previewImageUrl : `${API_BASE}${m.previewImageUrl}`) : null,
       }));
       setDrafts(normalized);
+      setDraftPage(0);
     } catch (_) { setDrafts([]); }
     setDraftsLoading(false);
   };
+
+  // Small component to render a single draft with preview/holoprint status and capture/upload controls
+  function DraftCard({ b, idx }) {
+    const localRef = useRef(null);
+    const [holoprintUploading, setHoloprintUploading] = useState(false);
+    const [holoprintName, setHoloprintName] = useState(b.holoprintUrl ? (b.holoprintUrl.split('/').pop()) : null);
+    const [previewUploading, setPreviewUploading] = useState(false);
+
+    useEffect(() => {
+      // register ref into shared map so existing handlers continue to work
+      if (localRef.current) viewerRefs.current[b.buildId] = localRef.current;
+      return () => { if (viewerRefs.current[b.buildId] === localRef.current) delete viewerRefs.current[b.buildId]; };
+    }, [b.buildId]);
+
+    const handleHoloprintChange = async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setHoloprintUploading(true);
+      setHoloprintName(file.name);
+      try {
+        const fd = new FormData(); fd.append('holoprint', file);
+        const res = await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(b.buildId)}/holoprint`, { method: 'POST', credentials: 'include', body: fd });
+        if (!res.ok) throw new Error('Upload failed');
+        // Try to update only this draft from the response (avoid reloading the entire page)
+        let data = {};
+        try { data = await res.json(); } catch (_) { data = {}; }
+        const newUrl = data?.holoprintUrl || data?.holoprint || null;
+        if (newUrl) {
+          // normalize to absolute if needed
+          const abs = newUrl.startsWith('http') ? newUrl : `${API_BASE}${newUrl}`;
+          setDrafts(prev => prev.map(d => d.buildId === b.buildId ? ({ ...d, holoprintUrl: abs }) : d));
+        } else {
+          // fallback: refresh the drafts list
+          await loadDrafts();
+        }
+      } catch (err) {
+        console.error('Holoprint upload failed', err);
+        alert('Holoprint upload failed');
+      } finally {
+        setHoloprintUploading(false);
+      }
+    };
+
+    const handleGeneratePreview = async () => {
+      const ref = viewerRefs.current[b.buildId];
+      if (!ref?.capture) return;
+      setPreviewUploading(true);
+      try {
+        const blob = await ref.capture({ quality: 1.0, scale: 2 });
+        const fd = new FormData();
+        fd.append('preview', blob, `${b.id || b.buildId || 'preview'}.png`);
+        const res = await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(b.buildId)}/preview`, { method: 'POST', credentials: 'include', body: fd });
+        if (!res.ok) throw new Error('Preview upload failed');
+        // Update just this draft with the response if possible to avoid a full refresh
+        let data = {};
+        try { data = await res.json(); } catch (_) { data = {}; }
+        const newUrl = data?.previewImageUrl || data?.preview || data?.previewUrl || null;
+        if (newUrl) {
+          const abs = newUrl.startsWith('http') ? newUrl : `${API_BASE}${newUrl}`;
+          setDrafts(prev => prev.map(d => d.buildId === b.buildId ? ({ ...d, previewImageUrl: abs }) : d));
+        } else {
+          // If the upload endpoint didn't return a URL, fetch the single build metadata and update that draft only
+          try {
+            const metaRes = await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(b.buildId)}`, { credentials: 'include', cache: 'no-store' });
+            if (metaRes.ok) {
+              const meta = await metaRes.json();
+              const normalized = {
+                ...meta,
+                url: meta.url?.startsWith('http') ? meta.url : `${API_BASE}${meta.url || ''}`,
+                mcstructureUrl: meta.mcstructureUrl ? (meta.mcstructureUrl.startsWith('http') ? meta.mcstructureUrl : `${API_BASE}${meta.mcstructureUrl}`) : null,
+                holoprintUrl: meta.holoprintUrl ? (meta.holoprintUrl.startsWith('http') ? meta.holoprintUrl : `${API_BASE}${meta.holoprintUrl}`) : null,
+                previewImageUrl: meta.previewImageUrl ? (meta.previewImageUrl.startsWith('http') ? meta.previewImageUrl : `${API_BASE}${meta.previewImageUrl}`) : null,
+              };
+              setDrafts(prev => prev.map(d => d.buildId === b.buildId ? ({ ...d, ...normalized }) : d));
+            }
+          } catch (e) {
+            // as a last resort, do nothing (avoid full reload)
+            console.warn('Could not refresh single draft metadata', e);
+          }
+        }
+      } catch (err) {
+        console.error('Preview generation failed', err);
+        alert('Preview generation failed');
+      } finally {
+        setPreviewUploading(false);
+      }
+    };
+
+    return (
+      <div key={b.buildId || idx} className="draft-panel" style={{ width: '100%', maxWidth: '100%', boxSizing: 'border-box', display: 'flex', gap: 16, padding: 12, alignItems: 'stretch', borderRadius: 12, border: '1px solid var(--border)', background: 'var(--panel-bg)', flexWrap: 'wrap' }}>
+        <div style={{ width: 300, minWidth: 180, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {/* Preview column */}
+          {b.previewImageUrl ? (
+            <div style={{ position: 'relative' }}>
+              <div style={{ padding: 8, borderRadius: 10, background: 'var(--preview-box-bg, rgba(255,255,255,0.02))', border: '1px solid var(--preview-box-border, rgba(255,255,255,0.04))' }}>
+                <img src={b.previewImageUrl} alt={`${b.name} preview`} style={{ width: '100%', height: 184, objectFit: 'contain', borderRadius: 6, display: 'block', background: 'transparent' }} />
+              </div>
+              <div style={{ position: 'absolute', left: 8, top: 8, background: 'rgba(0,0,0,0.6)', color: '#fff', padding: '6px 10px', borderRadius: 999, fontSize: 12 }}>Preview available</div>
+            </div>
+          ) : (
+            <div style={{ width: '100%', borderRadius: 10, padding: 12, background: 'var(--preview-box-bg, rgba(255,255,255,0.02))', border: '1px solid var(--preview-box-border, rgba(255,255,255,0.04))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#9ca3af' }}>
+              <div style={{ textAlign: 'center' }}>No preview</div>
+            </div>
+          )}
+
+          {/* Build info under the preview */}
+          <div style={{ marginTop: 6 }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {b.credits?.avatarUrl && <img src={b.credits.avatarUrl} alt={b.credits.author || 'author'} style={{ width: 36, height: 36, borderRadius: 999, objectFit: 'cover' }} />}
+              <div>
+                <div style={{ fontWeight: 600 }}>{b.credits?.author || b.author || 'Unknown author'}</div>
+                <div style={{ fontSize: 13, color: 'var(--muted)' }}>{b.name}</div>
+              </div>
+            </div>
+            {b.description && <div className="model-card-desc" style={{ color: 'var(--muted)', marginTop: 8 }}>{b.description}</div>}
+            {Array.isArray(b.categories) && b.categories.length>0 && (
+              <div className="tags" style={{ marginTop: 8 }}>{b.categories.map((c,i)=><span key={i} className="tag">{c}</span>)}</div>
+            )}
+          </div>
+        </div>
+
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ flex: '1 1 auto', minHeight: 260, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
+            <ModelViewer url={b.url} fitMargin={4.0} background={'var(--viewer-bg)'} fallbackImage={b.previewImageUrl} ref={(el)=>{ if (el) localRef.current = el; }} style={{ width: '100%', height: 360 }} showGrid={true} />
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {b.mcstructureUrl && <a className="btn" href={b.mcstructureUrl} download style={{ whiteSpace: 'nowrap' }}>Download .mcstructure</a>}
+            </div>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              {/* Holoprint upload moved into actions */}
+              <label className="btn" style={{ position: 'relative', overflow: 'hidden' }}>
+                <input type="file" accept=".mcpack" style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer' }} onChange={handleHoloprintChange} />
+                {holoprintUploading ? 'Uploading…' : 'Replace holoprint'}
+              </label>
+
+              <button className="btn" onClick={handleGeneratePreview} disabled={previewUploading}>{previewUploading ? 'Generating…' : (b.previewImageUrl ? 'Re-generate preview' : 'Generate preview')}</button>
+              <button className="btn primary" disabled={!b.holoprintUrl} title={!b.holoprintUrl ? 'Upload holoprint first' : undefined} onClick={async ()=>{
+                await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(b.buildId)}/ready`, { method: 'POST', credentials: 'include' });
+                setDrafts(prev => prev.filter(d => d.buildId !== b.buildId));
+              }}>Ready</button>
+              <button className="btn" onClick={()=>removeBuild(b)}>Remove</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Admin login removed; access controlled via Discord ID whitelist on session
 
@@ -228,6 +379,21 @@ export default function Admin() {
       setAdminSubmitting(false);
     }
   };
+
+  // Preview URL for selected admin .glb file
+  const [adGlbPreviewUrl, setAdGlbPreviewUrl] = useState(null);
+  useEffect(() => {
+    if (!upGlb) {
+      setAdGlbPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(upGlb);
+    setAdGlbPreviewUrl(url);
+    return () => {
+      try { URL.revokeObjectURL(url); } catch (e) {}
+      setAdGlbPreviewUrl(null);
+    };
+  }, [upGlb]);
 
   // Fetch aliases for consistent preview formatting (same as Upload page)
   useEffect(() => {
@@ -496,17 +662,27 @@ export default function Admin() {
             <div className="field">
               <label>Build name <span className="req">*</span></label>
               <input className={`input ${upSubmitted && upErrors.name ? 'input-error' : ''}`} type="text" value={upName} onChange={(e)=>setUpName(e.target.value)} placeholder="Ex: Medieval Watchtower" />
-              {upSubmitted && upErrors.name && <div className="error-text">{upErrors.name}</div>}
-            </div>
-          </div>
+                  <input className={`input-file ${upSubmitted && upErrors.glb ? 'input-error' : ''}`} type="file" accept=".glb,.GLB" onChange={(e)=>setUpGlb(e.target.files?.[0]||null)} />
+                  {upSubmitted && upErrors.glb && <div className="error-text">{upErrors.glb}</div>}
+                  {upGlb && <div className="file-meta">{upGlb.name} • {(upGlb.size/1024/1024).toFixed(2)} MB</div>}
+                  {/* Inline preview of the selected .glb file for admins */}
+                  {adGlbPreviewUrl && (
+                    <div style={{ marginTop: 12, width: '100%', height: 220, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
+                      <ModelViewer url={adGlbPreviewUrl} fitMargin={1.0} background={'var(--viewer-bg)'} />
+                    </div>
+                  )}
+                </div>
+              </div>
 
-          <div className="field-row">
-            <div className="field">
-              <label>Description</label>
-              <textarea className="textarea" rows={3} value={upDesc} onChange={(e)=>setUpDesc(e.target.value)} placeholder="Short description of the build" />
-            </div>
-          </div>
-
+              <div className="field-row">
+                <div className="field">
+                  <label>.mcstructure file <span className="req">*</span></label>
+                  <input className={`input-file ${upSubmitted && upErrors.mc ? 'input-error' : ''}`} type="file" accept=".mcstructure" onChange={(e)=>setUpMc(e.target.files?.[0]||null)} />
+                  {upSubmitted && upErrors.mc && <div className="error-text">{upErrors.mc}</div>}
+                  {upMc && <div className="file-meta">{upMc.name} • {(upMc.size/1024/1024).toFixed(2)} MB</div>}
+                  <div className="help">Required for in-game structure placement.</div>
+                </div>
+              </div>
           <div className="field-row">
             <div className="field">
               <label>Categories <span className="req">*</span></label>
@@ -542,6 +718,12 @@ export default function Admin() {
               <input className={`input-file ${upSubmitted && upErrors.glb ? 'input-error' : ''}`} type="file" accept=".glb,.GLB" onChange={(e)=>setUpGlb(e.target.files?.[0]||null)} />
               {upSubmitted && upErrors.glb && <div className="error-text">{upErrors.glb}</div>}
               {upGlb && <div className="file-meta">{upGlb.name} • {(upGlb.size/1024/1024).toFixed(2)} MB</div>}
+              {/* Inline preview of the selected .glb file for admins */}
+              {adGlbPreviewUrl && (
+                <div className="glb-preview" style={{ marginTop: 12 }}>
+                  <ModelViewer url={adGlbPreviewUrl} fitMargin={1.0} background={'var(--viewer-bg)'} />
+                </div>
+              )}
             </div>
             <div className="field">
               <label>.mcstructure file <span className="req">*</span></label>
@@ -669,50 +851,17 @@ export default function Admin() {
           )}
           {!draftsLoading && drafts.length === 0 && <p className="muted">No drafts yet.</p>}
           {!draftsLoading && drafts.length > 0 && (
-            <div className="grid fade-in">
-              {drafts.map((b, idx) => (
-                <div key={b.buildId || idx} className="model-card">
-                  <div className="model-card-viewer">
-                    <ModelViewer url={b.url} fitMargin={4.0} background={'var(--viewer-bg)'} ref={(el)=>{ if (el) viewerRefs.current[b.buildId] = el; }} />
-                  </div>
-                  <div className="model-card-info">
-                    <div className="model-card-title">{b.name}</div>
-                    {b.description && <div className="model-card-desc">{b.description}</div>}
-                    {Array.isArray(b.categories) && b.categories.length>0 && (
-                      <div className="tags">{b.categories.map((c,i)=><span key={i} className="tag">{c}</span>)}</div>
-                    )}
-                  </div>
-                  <div className="model-card-actions" style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                    {b.mcstructureUrl && <a className="btn" href={b.mcstructureUrl} download>Download .mcstructure</a>}
-                    <label className="btn" style={{ position:'relative', overflow:'hidden' }}>
-                      <input type="file" accept=".mcpack" style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer' }} onChange={async (e)=>{
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-                        const fd = new FormData();
-                        fd.append('holoprint', file);
-                        await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(b.buildId)}/holoprint`, { method: 'POST', credentials: 'include', body: fd });
-                        loadDrafts();
-                      }} />
-                      Upload holoprint
-                    </label>
-                    <button className="btn" onClick={async ()=>{
-                      const ref = viewerRefs.current[b.buildId];
-                      if (!ref?.capture) return;
-                      const blob = await ref.capture();
-                      const fd = new FormData();
-                      fd.append('preview', blob, `${b.id || b.buildId || 'preview'}.png`);
-                      await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(b.buildId)}/preview`, { method: 'POST', credentials: 'include', body: fd });
-                      loadDrafts();
-                    }}>Generate preview</button>
-                    <button className="btn primary" disabled={!b.holoprintUrl} title={!b.holoprintUrl ? 'Upload holoprint first' : undefined} onClick={async ()=>{
-                      await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(b.buildId)}/ready`, { method: 'POST', credentials: 'include' });
-                      // Move to Manage
-                      setDrafts(prev => prev.filter(d => d.buildId !== b.buildId));
-                    }}>Ready</button>
-                    <button className="btn" onClick={()=>removeBuild(b)}>Remove</button>
-                  </div>
-                </div>
-              ))}
+            <div className="drafts-list" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Show one draft per page to avoid flooding the admin UI */}
+              <div>
+                <DraftCard b={drafts[draftPage]} idx={draftPage} key={drafts[draftPage].buildId || draftPage} />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'center', gap: 12, alignItems: 'center' }}>
+                <button className="btn" onClick={() => setDraftPage(p => Math.max(0, p - 1))} disabled={draftPage <= 0}>Prev</button>
+                <div style={{ fontSize: 13, color: 'var(--muted)' }}>{draftPage + 1} / {drafts.length}</div>
+                <button className="btn" onClick={() => setDraftPage(p => Math.min(drafts.length - 1, p + 1))} disabled={draftPage >= drafts.length - 1}>Next</button>
+              </div>
             </div>
           )}
         </div>
