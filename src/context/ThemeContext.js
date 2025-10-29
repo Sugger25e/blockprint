@@ -13,6 +13,14 @@ export function ThemeProvider({ children }) {
       document.documentElement.setAttribute('data-theme', theme);
     }
     try { window.localStorage.setItem('theme', theme); } catch {}
+    // Remove any inline background/color applied by the pre-render script in index.html
+    // so that theme changes take full effect without requiring a reload.
+    try {
+      if (typeof document !== 'undefined' && document.documentElement && document.documentElement.style) {
+        document.documentElement.style.background = '';
+        document.documentElement.style.color = '';
+      }
+    } catch (_) {}
   }, [theme]);
 
   const toggle = () => setTheme((t) => (t === 'light' ? 'dark' : 'light'));

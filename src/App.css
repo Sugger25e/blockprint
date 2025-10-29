@@ -5,7 +5,8 @@
   --text: #0f1115;
   --muted: #6b7280;
   --accent: #3b82f6;
-  --border: #e5e7eb;
+  /* Slightly darker border on light theme so it remains visible against very light backgrounds */
+  --border: #d1d5db;
   --viewer-bg: #f4f4f4;
   --skeleton-1: rgba(0,0,0,0.06);
   --skeleton-2: rgba(0,0,0,0.12);
