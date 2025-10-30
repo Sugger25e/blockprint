@@ -712,34 +712,41 @@ export default function ModelDetail() {
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                             <div style={{ fontWeight: 600 }}>{c.username}</div>
                             <div className="muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: 12 }}>{new Date(c.createdAt).toLocaleString()}</div>
-                            {user && c.userId && String(c.userId) === String(user.userId) && (
+                            {user && c.userId && (
                               <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-                                <button
-                                  className="comment-action-icon"
-                                  title="Edit comment"
-                                  aria-label="Edit comment"
-                                  onClick={() => { setEditingId(c.id); setEditingText(c.text); }}
-                                >
-                                  <i className="fa-solid fa-pen" aria-hidden="true"></i>
-                                </button>
-                                <button
-                                  className="comment-action-icon"
-                                  title="Delete comment"
-                                  aria-label="Delete comment"
-                                  onClick={async () => {
-                                    try {
-                                      const ok = await confirm('Delete this comment?');
-                                      if (!ok) return;
-                                      const r = await apiDeleteComment(model.id, c.id);
-                                      if (r?.ok) {
-                                        setComments(prev => prev.filter(x => x.id !== c.id));
-                                        try { showToast('Comment deleted'); } catch {}
-                                      }
-                                    } catch (_) {}
-                                  }}
-                                >
-                                  <i className="fa-solid fa-trash" aria-hidden="true"></i>
-                                </button>
+                                {/* Edit only for the comment owner */}
+                                {String(c.userId) === String(user.userId) && (
+                                  <button
+                                    className="comment-action-icon"
+                                    title="Edit comment"
+                                    aria-label="Edit comment"
+                                    onClick={() => { setEditingId(c.id); setEditingText(c.text); }}
+                                  >
+                                    <i className="fa-solid fa-pen" aria-hidden="true"></i>
+                                  </button>
+                                )}
+
+                                {/* Delete allowed for owner or admins */}
+                                {(String(c.userId) === String(user.userId) || !!user.isAdmin) && (
+                                  <button
+                                    className="comment-action-icon"
+                                    title="Delete comment"
+                                    aria-label="Delete comment"
+                                    onClick={async () => {
+                                      try {
+                                        const ok = await confirm('Delete this comment?');
+                                        if (!ok) return;
+                                        const r = await apiDeleteComment(model.id, c.id);
+                                        if (r?.ok) {
+                                          setComments(prev => prev.filter(x => x.id !== c.id));
+                                          try { showToast('Comment deleted'); } catch {}
+                                        }
+                                      } catch (_) {}
+                                    }}
+                                  >
+                                    <i className="fa-solid fa-trash" aria-hidden="true"></i>
+                                  </button>
+                                )}
                               </div>
                             )}
                           </div>
