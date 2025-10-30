@@ -455,6 +455,42 @@ label { font-weight: 600; color: var(--text); }
 .modal-head { font-size: 18px; margin-bottom: 6px; }
 @keyframes scaleIn { from { transform: translateY(4px) scale(0.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
 
+/* Captcha modal specific styling to make it more engaging and center the widget */
+.captcha-modal {
+  text-align: center;
+  padding: 22px 20px;
+  border-radius: 14px;
+  box-shadow: 0 28px 64px rgba(2,6,23,0.32);
+}
+.captcha-modal .modal-head {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.captcha-modal .muted {
+  color: var(--muted);
+  font-size: 14px;
+}
+.captcha-modal .hcaptcha-widget {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 8px auto 12px;
+}
+.captcha-modal .modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 6px;
+}
+.captcha-modal .btn { min-width: 110px; }
+.captcha-modal .btn.primary { min-width: 120px; }
+
+@media (max-width: 520px) {
+  .captcha-modal { padding: 16px; }
+  .captcha-modal .modal-head { font-size: 18px; }
+}
+
 /* Confirm dialog popup animation: a quick pop/overshoot then settle */
 @keyframes confirmPop {
   0% { transform: translateY(6px) scale(0.98); opacity: 0; }

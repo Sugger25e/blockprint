@@ -674,12 +674,38 @@ export default function ModelDetail() {
 
                           {/* Captcha modal dialog */}
                           {showCaptchaDialog && (
-                            <div role="dialog" aria-modal="true" className="modal-backdrop" style={{ zIndex: 2200 }} onClick={() => { /* click outside cancels */ setShowCaptchaDialog(false); try { if (hcaptchaWidgetIdRef.current != null) { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); hcaptchaWidgetIdRef.current = null; } } catch(e){} }}>
-                              <div className="modal confirm-pop" style={{ maxWidth: 540, width: '92%' }} onClick={(e)=>e.stopPropagation()}>
-                                <div style={{ marginBottom: 12 }}>Please verify you are human</div>
-                                <div ref={modalHcaptchaContainerRef} style={{ marginBottom: 12 }} />
-                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-                                  <button className="btn" onClick={() => { setShowCaptchaDialog(false); try { if (hcaptchaWidgetIdRef.current != null) { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); hcaptchaWidgetIdRef.current = null; } } catch(e){} }}>Cancel</button>
+                            <div
+                              role="dialog"
+                              aria-modal="true"
+                              className="modal-backdrop"
+                              style={{ zIndex: 2200 }}
+                              onClick={() => {
+                                /* click outside cancels */
+                                setShowCaptchaDialog(false);
+                                try {
+                                  if (hcaptchaWidgetIdRef.current != null) {
+                                    window.hcaptcha.reset(hcaptchaWidgetIdRef.current);
+                                    hcaptchaWidgetIdRef.current = null;
+                                  }
+                                } catch (e) {}
+                              }}
+                            >
+                              <div className="modal confirm-pop captcha-modal" style={{ maxWidth: 540, width: '92%' }} onClick={(e) => e.stopPropagation()}>
+                                <div className="modal-head">Please verify you are human</div>
+                                <div className="muted" style={{ marginBottom: 12 }}>Complete the captcha below to confirm you're not a bot. This helps keep our community clean.</div>
+
+                                <div ref={modalHcaptchaContainerRef} className="hcaptcha-widget" style={{ marginBottom: 12 }} />
+
+                                <div className="modal-actions" style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+                                  <button className="btn" onClick={() => {
+                                    setShowCaptchaDialog(false);
+                                    try {
+                                      if (hcaptchaWidgetIdRef.current != null) {
+                                        window.hcaptcha.reset(hcaptchaWidgetIdRef.current);
+                                        hcaptchaWidgetIdRef.current = null;
+                                      }
+                                    } catch (e) {}
+                                  }}>Cancel</button>
                                   <button className="btn primary" onClick={async () => {
                                     // ensure widget rendered
                                     if (!window || !window.hcaptcha || hcaptchaWidgetIdRef.current == null) { showToast('Captcha not ready'); return; }
@@ -701,7 +727,7 @@ export default function ModelDetail() {
                                     } finally {
                                       setPosting(false);
                                       setShowCaptchaDialog(false);
-                                      try { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); } catch(e){}
+                                      try { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); } catch (e) {}
                                       hcaptchaWidgetIdRef.current = null;
                                     }
                                   }}>Post</button>
