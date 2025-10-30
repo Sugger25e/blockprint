@@ -19,18 +19,21 @@ export default async function handler(req, res) {
 
     const siteName = 'Blockprint';
   const author = (model && model.credits && model.credits.author) ? model.credits.author : '';
-  const title = model ? `${model.name}${author ? ` by ${author}` : ''} — ${siteName}` : `Model ${modelId} — ${siteName}`;
-    const description = (model?.description || 'Discover and share Minecraft builds with materials and downloads.').slice(0, 200);
+  // Title should be "Name by Author" (no trailing site name)
+  const title = model ? `${model.name}${author ? ` by ${author}` : ''}` : `Model ${modelId}`;
+    // Default to a short, neutral fallback when model has no description
+    const description = (model?.description || 'no description provided').slice(0, 200);
 
     // Prefer a prepared screenshot if available (convention): /screenshots/glb/<id>.png
     const screenshot = `${origin}/screenshots/glb/${modelId}.png`;
     const fallbackImg = `${origin}/logo.png`;
     // Primary image preference order: explicit previewImage, screenshot, then logo
-    let primaryImage = fallbackImg;
+    let primaryImage = null;
     if (model?.previewImage) {
       primaryImage = model.previewImage.startsWith('http') ? model.previewImage : `${origin}${model.previewImage}`;
     } else {
-      primaryImage = screenshot;
+      // use generated screenshot if available, otherwise fall back to site logo
+      primaryImage = screenshot || fallbackImg;
     }
 
     const pageUrl = `${origin}/model/${encodeURIComponent(id)}`;
@@ -52,8 +55,6 @@ export default async function handler(req, res) {
   <meta property="og:url" content="${escapeHtml(pageUrl)}" />
   <meta property="og:image" content="${escapeHtml(primaryImage)}" />
   <meta property="og:image:alt" content="${escapeHtml(model?.name || siteName)}" />
-  <meta property="og:image" content="${escapeHtml(fallbackImg)}" />
-  <meta property="og:image:alt" content="${escapeHtml(siteName)}" />
 
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="${escapeHtml(title)}" />
