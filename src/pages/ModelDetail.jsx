@@ -91,7 +91,9 @@ export default function ModelDetail() {
   const editRef = useRef(null);
   const hcaptchaWidgetIdRef = useRef(null);
   const hcaptchaContainerRef = useRef(null);
+  const modalHcaptchaContainerRef = useRef(null);
   const pendingCommentRef = useRef(null);
+  const [showCaptchaDialog, setShowCaptchaDialog] = useState(false);
   const HCAPTCHA_SITEKEY = process.env.REACT_APP_HCAPTCHA_SITEKEY;
 
   // Load hCaptcha script when sitekey is configured
@@ -115,6 +117,37 @@ export default function ModelDetail() {
     document.head.appendChild(s);
     return () => { /* keep script for reuse */ };
   }, [HCAPTCHA_SITEKEY]);
+
+  // Render visible hCaptcha checkbox widget into a modal container when the captcha dialog is shown
+  useEffect(() => {
+    if (!HCAPTCHA_SITEKEY) return;
+    if (!showCaptchaDialog) return;
+    if (typeof window === 'undefined') return;
+    let mounted = true;
+    const tryRender = () => {
+      if (!mounted) return;
+      if (!modalHcaptchaContainerRef.current) return;
+      if (!window.hcaptcha) return;
+      // if there's already a widget id, don't re-render
+      if (hcaptchaWidgetIdRef.current != null) return;
+      try {
+        hcaptchaWidgetIdRef.current = window.hcaptcha.render(modalHcaptchaContainerRef.current, {
+          sitekey: HCAPTCHA_SITEKEY,
+          size: 'normal',
+          callback: () => {
+            // visible widget will set response; we read it when the user clicks Post in the modal
+          }
+        });
+      } catch (e) {
+        console.error('hcaptcha render failed', e);
+      }
+    };
+    // Try immediately, and poll briefly if script not yet loaded
+    tryRender();
+    const poll = setInterval(tryRender, 300);
+    const to = setTimeout(() => clearInterval(poll), 5000);
+    return () => { mounted = false; clearInterval(poll); clearTimeout(to); };
+  }, [HCAPTCHA_SITEKEY, showCaptchaDialog]);
 
   useEffect(() => {
     // auto-resize composer textarea on mount/update
@@ -598,54 +631,14 @@ export default function ModelDetail() {
                             placeholder={`Comment as ${user.username}...`}
                           />
                           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                            <div ref={hcaptchaContainerRef} style={{ display: 'none' }} />
                             <button className="btn primary" onClick={async () => {
                               const text = commentText && commentText.trim();
                               if (!text) return;
-                              // If hCaptcha sitekey is configured, use invisible widget flow
-                              if (HCAPTCHA_SITEKEY && window && window.hcaptcha) {
-                                // save pending comment and execute widget
+                              // If hCaptcha sitekey is configured, open a modal with the visible captcha box
+                              if (HCAPTCHA_SITEKEY && typeof window !== 'undefined' && window.hcaptcha) {
                                 pendingCommentRef.current = text;
-                                setPosting(true);
-                                try {
-                                  if (hcaptchaWidgetIdRef.current == null) {
-                                    // try to render on the fly (fallback)
-                                    try {
-                                      hcaptchaWidgetIdRef.current = window.hcaptcha.render(hcaptchaContainerRef.current, {
-                                        sitekey: HCAPTCHA_SITEKEY,
-                                        size: 'invisible',
-                                        callback: async (token) => {
-                                          try {
-                                            const txt = pendingCommentRef.current;
-                                            pendingCommentRef.current = null;
-                                            const r = await apiPostComment(model.id, txt, token);
-                                            if (r?.comment) {
-                                              setComments(prev => [r.comment, ...prev]);
-                                              setCommentText('');
-                                              if (composerRef.current) composerRef.current.style.height = 'auto';
-                                              try { showToast('Comment posted'); } catch {}
-                                            }
-                                          } catch (e) {
-                                            console.error('post comment via hcaptcha failed', e);
-                                          } finally {
-                                            setPosting(false);
-                                            try { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); } catch {}
-                                          }
-                                        }
-                                      });
-                                    } catch (e) {
-                                      console.error('hcaptcha render failed', e);
-                                    }
-                                  }
-                                  // execute (this will call our callback)
-                                  if (hcaptchaWidgetIdRef.current != null) {
-                                    try { window.hcaptcha.execute(hcaptchaWidgetIdRef.current); } catch (e) { console.error(e); setPosting(false); }
-                                    return;
-                                  }
-                                } catch (e) {
-                                  console.error('hcaptcha flow error', e);
-                                  setPosting(false);
-                                }
+                                setShowCaptchaDialog(true);
+                                return;
                               }
 
                               // fallback: no hCaptcha configured or failed to load
@@ -664,6 +657,44 @@ export default function ModelDetail() {
                               setPosting(false);
                             }} disabled={posting}>{posting ? 'Posting…' : 'Post comment'}</button>
                           </div>
+
+                          {/* Captcha modal dialog */}
+                          {showCaptchaDialog && (
+                            <div role="dialog" aria-modal="true" className="modal-backdrop" style={{ zIndex: 2200 }} onClick={() => { /* click outside cancels */ setShowCaptchaDialog(false); try { if (hcaptchaWidgetIdRef.current != null) { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); hcaptchaWidgetIdRef.current = null; } } catch(e){} }}>
+                              <div className="modal confirm-pop" style={{ maxWidth: 540, width: '92%' }} onClick={(e)=>e.stopPropagation()}>
+                                <div style={{ marginBottom: 12 }}>Please verify you are human</div>
+                                <div ref={modalHcaptchaContainerRef} style={{ marginBottom: 12 }} />
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                                  <button className="btn" onClick={() => { setShowCaptchaDialog(false); try { if (hcaptchaWidgetIdRef.current != null) { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); hcaptchaWidgetIdRef.current = null; } } catch(e){} }}>Cancel</button>
+                                  <button className="btn primary" onClick={async () => {
+                                    // ensure widget rendered
+                                    if (!window || !window.hcaptcha || hcaptchaWidgetIdRef.current == null) { showToast('Captcha not ready'); return; }
+                                    const token = window.hcaptcha.getResponse(hcaptchaWidgetIdRef.current);
+                                    if (!token) { showToast('Please complete the captcha'); return; }
+                                    setPosting(true);
+                                    try {
+                                      const txt = pendingCommentRef.current;
+                                      pendingCommentRef.current = null;
+                                      const r = await apiPostComment(model.id, txt, token);
+                                      if (r?.comment) {
+                                        setComments(prev => [r.comment, ...prev]);
+                                        setCommentText('');
+                                        if (composerRef.current) composerRef.current.style.height = 'auto';
+                                        try { showToast('Comment posted'); } catch {}
+                                      }
+                                    } catch (e) {
+                                      console.error('post comment via captcha failed', e);
+                                    } finally {
+                                      setPosting(false);
+                                      setShowCaptchaDialog(false);
+                                      try { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); } catch(e){}
+                                      hcaptchaWidgetIdRef.current = null;
+                                    }
+                                  }}>Post</button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </>
                     ) : (

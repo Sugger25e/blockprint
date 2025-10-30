@@ -115,51 +115,31 @@ export default function Upload() {
       try { form.append('materials', JSON.stringify(materialsPreview)); } catch(_) {}
     }
     try {
-      // If hCaptcha is configured, use invisible widget flow
+      // If hCaptcha is configured, require visible checkbox verification and read token
       if (HCAPTCHA_SITEKEY && window && window.hcaptcha) {
-        pendingFormRef.current = form;
-        // render widget if needed
         if (hcaptchaWidgetIdRef.current == null) {
-          try {
-            hcaptchaWidgetIdRef.current = window.hcaptcha.render(hcaptchaContainerRef.current, {
-              sitekey: HCAPTCHA_SITEKEY,
-              size: 'invisible',
-              callback: async (token) => {
-                try {
-                  const fd = pendingFormRef.current;
-                  if (!fd) return;
-                  fd.append('hcaptchaToken', token);
-                  const res = await fetch(`${API_BASE}/api/submissions`, { method: 'POST', body: fd, credentials: 'include' });
-                  if (!res.ok) throw new Error('Failed');
-                  setStatus('success');
-                  setName(''); setDescription(''); setCategories([]);
-                  setShowSuccess(true);
-                  try { showToast('Submission posted'); } catch {}
-                } catch (err) {
-                  console.error('Submission via hcaptcha failed', err);
-                  setStatus('error');
-                } finally {
-                  pendingFormRef.current = null;
-                  setIsSubmitting(false);
-                  submitLock.current = false;
-                  setCooldown(true);
-                  setTimeout(() => setCooldown(false), 1200);
-                  try { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); } catch {}
-                }
-              }
-            });
-          } catch (e) { console.error('hcaptcha render failed', e); }
+          showToast('Captcha not ready');
+          setIsSubmitting(false);
+          submitLock.current = false;
+          return;
         }
-        try { window.hcaptcha.execute(hcaptchaWidgetIdRef.current); } catch (e) { console.error('hcaptcha execute failed', e); }
-        return;
+        const token = window.hcaptcha.getResponse(hcaptchaWidgetIdRef.current);
+        if (!token) {
+          showToast('Please complete the captcha');
+          setIsSubmitting(false);
+          submitLock.current = false;
+          return;
+        }
+        form.append('hcaptchaToken', token);
       }
 
       const res = await fetch(`${API_BASE}/api/submissions`, { method: 'POST', body: form, credentials: 'include' });
       if (!res.ok) throw new Error('Failed');
       setStatus('success');
-      // reset some fields but keep files visible
       setName(''); setDescription(''); setCategories([]);
       setShowSuccess(true);
+      try { showToast('Submission posted'); } catch {}
+      try { if (HCAPTCHA_SITEKEY && window && window.hcaptcha && hcaptchaWidgetIdRef.current != null) window.hcaptcha.reset(hcaptchaWidgetIdRef.current); } catch (e) { }
     } catch (e) {
       setStatus('error');
     } finally {
@@ -203,6 +183,34 @@ export default function Upload() {
     s.onerror = () => { console.error('Failed to load hcaptcha script'); };
     document.head.appendChild(s);
     return () => {};
+  }, [HCAPTCHA_SITEKEY]);
+
+  // Render visible hCaptcha checkbox widget into the form when ready
+  useEffect(() => {
+    if (!HCAPTCHA_SITEKEY) return;
+    if (typeof window === 'undefined') return;
+    let mounted = true;
+    const tryRender = () => {
+      if (!mounted) return;
+      if (!hcaptchaContainerRef.current) return;
+      if (!window.hcaptcha) return;
+      if (hcaptchaWidgetIdRef.current != null) return;
+      try {
+        hcaptchaWidgetIdRef.current = window.hcaptcha.render(hcaptchaContainerRef.current, {
+          sitekey: HCAPTCHA_SITEKEY,
+          size: 'normal',
+          callback: () => {
+            // visible widget will set response; we'll call getResponse when submitting
+          }
+        });
+      } catch (e) {
+        console.error('hcaptcha render failed', e);
+      }
+    };
+    tryRender();
+    const poll = setInterval(tryRender, 300);
+    const to = setTimeout(() => clearInterval(poll), 5000);
+    return () => { mounted = false; clearInterval(poll); clearTimeout(to); };
   }, [HCAPTCHA_SITEKEY]);
 
   // Parse materials from selected .mcstructure for on-page preview
@@ -553,6 +561,8 @@ export default function Upload() {
           </div>
         </div>
 
+        {/* Visible hCaptcha checkbox (if configured) */}
+        <div style={{ marginTop: 12 }} ref={hcaptchaContainerRef} />
         <div className="field-row">
           <button
             className="btn primary"
