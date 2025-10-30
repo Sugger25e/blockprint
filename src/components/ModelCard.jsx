@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { getBuildStats } from '../utils/modelActions';
 
 export default function ModelCard({ model, actionLabel, onAction }) {
+  // model may include either `previewImage` or `previewImageUrl` depending on server response
   const { id, name, description, url, categories, previewImage, previewImageUrl } = model;
   const author = typeof model.credits === 'string' ? model.credits : model.credits?.author;
   const navigate = useNavigate();

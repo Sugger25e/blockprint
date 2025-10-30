@@ -231,26 +231,40 @@ export default function ModelDetail() {
 
   useEffect(() => {
     if (!model) return;
-    const title = `${model.name} — Blockprint`;
-    const desc = model.description || 'Minecraft build on Blockprint';
+    // Title: show "Name by Author" when author exists, otherwise just the name
     const author = model.credits?.author || undefined;
+    const title = author ? `${model.name} by ${author}` : model.name;
+
+    // Description: use provided description or a clear placeholder
+    const desc = (model.description && String(model.description).trim()) ? model.description : 'no description provided';
+
+    // Prefer an explicit preview image from the model (server-provided) first.
+    // Fallback to the generated ogImage (canvas) only if no preview image exists.
+    const previewImg = model.previewImage || model.previewImageUrl || null;
+    const image = previewImg || ogImage || null;
+
     const url = typeof window !== 'undefined' ? window.location.href : undefined;
-    const image = ogImage || undefined;
 
     document.title = title;
     setNamedMeta('description', desc);
     if (author) setNamedMeta('author', author);
     setNamedMeta('theme-color', '#3b82f6');
+
+    // Open Graph / Twitter cards
     setOG('og:title', title);
     setOG('og:description', desc);
     setOG('og:site_name', 'Blockprint');
     setOG('og:type', 'website');
     if (url) setOG('og:url', url);
-    if (image) setOG('og:image', image);
+    // Only set og:image/twitter:image if we have a preview image or generated image.
+    if (image) {
+      setOG('og:image', image);
+      setTwitter('twitter:image', image);
+    }
+
     setTwitter('twitter:card', 'summary_large_image');
     setTwitter('twitter:title', title);
     setTwitter('twitter:description', desc);
-    if (image) setTwitter('twitter:image', image);
   }, [model, ogImage]);
 
   // fetch stats and comments for this model
