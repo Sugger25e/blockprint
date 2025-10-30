@@ -2,6 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useModels } from '../context/ModelsContext';
 import ModelViewer from '../components/ModelViewer';
+import { useAuth } from '../context/AuthContext';
+import { useToast, useConfirm } from '../context/UiContext';
+import { getBuildStats, toggleLike as apiToggleLike, toggleFavorite as apiToggleFavorite, getComments as apiGetComments, postComment as apiPostComment, editComment as apiEditComment, deleteComment as apiDeleteComment } from '../utils/modelActions';
 
 function MaterialRow({ mat }) {
   const icon = typeof mat.icon === 'string' ? mat.icon : '';
@@ -71,6 +74,70 @@ export default function ModelDetail() {
   const [infoOpen, setInfoOpen] = useState(false);
   const infoRef = useRef(null);
   const bubbleRef = useRef(null);
+  const { user } = useAuth();
+  const { showToast } = useToast();
+  const { confirm } = useConfirm();
+  const [likeCount, setLikeCount] = useState(null);
+  const [liked, setLiked] = useState(false);
+  const [favorited, setFavorited] = useState(false);
+  const [heartPulse, setHeartPulse] = useState(false);
+  const [favPulse, setFavPulse] = useState(false);
+  const [comments, setComments] = useState([]);
+  const [commentText, setCommentText] = useState('');
+  const [posting, setPosting] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editingText, setEditingText] = useState('');
+  const composerRef = useRef(null);
+  const editRef = useRef(null);
+  const hcaptchaWidgetIdRef = useRef(null);
+  const hcaptchaContainerRef = useRef(null);
+  const pendingCommentRef = useRef(null);
+  const HCAPTCHA_SITEKEY = process.env.REACT_APP_HCAPTCHA_SITEKEY;
+
+  // Load hCaptcha script when sitekey is configured
+  useEffect(() => {
+    if (!HCAPTCHA_SITEKEY) return;
+    if (typeof window === 'undefined') return;
+    if (window.hcaptcha) return;
+    const id = 'hcaptcha-script';
+    if (document.getElementById(id)) return;
+    const s = document.createElement('script');
+    s.src = 'https://js.hcaptcha.com/1/api.js';
+    s.async = true;
+    s.defer = true;
+    s.id = id;
+    s.onload = () => {
+      // no-op; widget will be rendered on demand when user posts
+    };
+    s.onerror = () => {
+      console.error('Failed to load hcaptcha script');
+    };
+    document.head.appendChild(s);
+    return () => { /* keep script for reuse */ };
+  }, [HCAPTCHA_SITEKEY]);
+
+  useEffect(() => {
+    // auto-resize composer textarea on mount/update
+    if (composerRef.current) {
+      const el = composerRef.current;
+      el.style.height = 'auto';
+      el.style.height = (el.scrollHeight) + 'px';
+    }
+  }, [commentText]);
+
+  useEffect(() => {
+    if (editRef.current) {
+      const el = editRef.current;
+      el.style.height = 'auto';
+      el.style.height = (el.scrollHeight) + 'px';
+    }
+  }, [editingText, editingId]);
+
+  function autoResizeTextarea(el) {
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = (el.scrollHeight) + 'px';
+  }
 
   useEffect(() => {
     if (!model) return;
@@ -152,6 +219,27 @@ export default function ModelDetail() {
     setTwitter('twitter:description', desc);
     if (image) setTwitter('twitter:image', image);
   }, [model, ogImage]);
+
+  // fetch stats and comments for this model
+  useEffect(() => {
+    if (!model) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const stats = await getBuildStats(model.id);
+        if (!cancelled && stats) {
+          setLikeCount(typeof stats.likeCount === 'number' ? stats.likeCount : null);
+          setLiked(!!stats.liked);
+          setFavorited(!!stats.favorited);
+        }
+      } catch (_) {}
+      try {
+        const cRes = await apiGetComments(model.id);
+        if (!cancelled && cRes?.comments) setComments(cRes.comments || []);
+      } catch (_) {}
+    })();
+    return () => { cancelled = true; };
+  }, [model]);
 
   function setNamedMeta(name, content) {
     if (!content) return;
@@ -352,6 +440,53 @@ export default function ModelDetail() {
             ambientIntensity={ambientIntensity}
         modelId={model.id}
       />
+      {/* viewer overlay controls (like / favorite) placed top-right */}
+      <div className="viewer-controls" aria-hidden={false}>
+        <button
+          className={`icon-btn ${heartPulse ? 'pop-anim' : ''}`}
+          onClick={async (e) => {
+            e.stopPropagation();
+              if (!user) { showToast('Please log in to like models'); return; }
+            try {
+              setHeartPulse(true);
+              const res = await apiToggleLike(model.id);
+              if (res) {
+                setLiked(!!res.liked);
+                setLikeCount(typeof res.likeCount === 'number' ? res.likeCount : likeCount);
+                try { showToast(res.liked ? 'Liked this model' : 'Removed like'); } catch {}
+              }
+            } catch (_) {}
+            setTimeout(() => setHeartPulse(false), 420);
+          }}
+          aria-label={liked ? 'Unlike' : 'Like'}
+          title={liked ? 'Unlike' : 'Like'}
+        >
+          <i className={`fa-solid fa-heart icon-heart ${liked ? 'active' : ''}`} aria-hidden="true"></i>
+        </button>
+
+        <button
+          className={`icon-btn ${favPulse ? 'pop-anim' : ''}`}
+          onClick={async (e) => {
+            e.stopPropagation();
+              if (!user) { showToast('Please log in to favorite models'); return; }
+            try {
+              setFavPulse(true);
+              const res = await apiToggleFavorite(model.id);
+              if (res) setFavorited(!!res.favorited);
+              try { showToast(res.favorited ? 'Added to favorites' : 'Removed from favorites'); } catch {}
+            } catch (_) {}
+            setTimeout(() => setFavPulse(false), 420);
+          }}
+          aria-label={favorited ? 'Remove favorite' : 'Add to favorites'}
+          title={favorited ? 'Remove favorite' : 'Add to favorites'}
+        >
+          <i className={`fa-solid fa-star icon-star ${favorited ? 'active' : ''}`} aria-hidden="true"></i>
+        </button>
+      </div>
+
+      {typeof likeCount === 'number' && (
+        <div className="viewer-like-badge" aria-hidden="true">{likeCount} likes</div>
+      )}
     </div>
 
     {/* Holoprint and credits outside the box */}
@@ -436,10 +571,183 @@ export default function ModelDetail() {
                     )}
                   </div>
                 )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Comments: placed under credits (not in the aside) */}
+                <div className="comments" style={{ marginTop: 14 }}>
+                  <h3>Comments</h3>
+
+                  {/* Comment composer (shows avatar + placeholder) */}
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 8 }}>
+                    {user ? (
+                      <>
+                        {user.avatarUrl ? (
+                          <img src={user.avatarUrl} alt="Your avatar" width={40} height={40} style={{ borderRadius: '50%' }} />
+                        ) : (
+                          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--border)' }} />
+                        )}
+                        <div style={{ flex: 1 }}>
+                          <textarea
+                            ref={composerRef}
+                            className="comment-input"
+                            value={commentText}
+                            onChange={(e) => { setCommentText(e.target.value); autoResizeTextarea(e.target); }}
+                            rows={1}
+                            placeholder={`Comment as ${user.username}...`}
+                          />
+                          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                            <div ref={hcaptchaContainerRef} style={{ display: 'none' }} />
+                            <button className="btn primary" onClick={async () => {
+                              const text = commentText && commentText.trim();
+                              if (!text) return;
+                              // If hCaptcha sitekey is configured, use invisible widget flow
+                              if (HCAPTCHA_SITEKEY && window && window.hcaptcha) {
+                                // save pending comment and execute widget
+                                pendingCommentRef.current = text;
+                                setPosting(true);
+                                try {
+                                  if (hcaptchaWidgetIdRef.current == null) {
+                                    // try to render on the fly (fallback)
+                                    try {
+                                      hcaptchaWidgetIdRef.current = window.hcaptcha.render(hcaptchaContainerRef.current, {
+                                        sitekey: HCAPTCHA_SITEKEY,
+                                        size: 'invisible',
+                                        callback: async (token) => {
+                                          try {
+                                            const txt = pendingCommentRef.current;
+                                            pendingCommentRef.current = null;
+                                            const r = await apiPostComment(model.id, txt, token);
+                                            if (r?.comment) {
+                                              setComments(prev => [r.comment, ...prev]);
+                                              setCommentText('');
+                                              if (composerRef.current) composerRef.current.style.height = 'auto';
+                                              try { showToast('Comment posted'); } catch {}
+                                            }
+                                          } catch (e) {
+                                            console.error('post comment via hcaptcha failed', e);
+                                          } finally {
+                                            setPosting(false);
+                                            try { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); } catch {}
+                                          }
+                                        }
+                                      });
+                                    } catch (e) {
+                                      console.error('hcaptcha render failed', e);
+                                    }
+                                  }
+                                  // execute (this will call our callback)
+                                  if (hcaptchaWidgetIdRef.current != null) {
+                                    try { window.hcaptcha.execute(hcaptchaWidgetIdRef.current); } catch (e) { console.error(e); setPosting(false); }
+                                    return;
+                                  }
+                                } catch (e) {
+                                  console.error('hcaptcha flow error', e);
+                                  setPosting(false);
+                                }
+                              }
+
+                              // fallback: no hCaptcha configured or failed to load
+                              setPosting(true);
+                              try {
+                                const r = await apiPostComment(model.id, text);
+                                if (r?.comment) {
+                                  setComments(prev => [r.comment, ...prev]);
+                                  setCommentText('');
+                                  if (composerRef.current) composerRef.current.style.height = 'auto';
+                                  try { showToast('Comment posted'); } catch {}
+                                }
+                              } catch (e) {
+                                console.error('post comment failed', e);
+                              }
+                              setPosting(false);
+                            }} disabled={posting}>{posting ? 'Posting…' : 'Post comment'}</button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="muted">Please log in to post comments.</p>
+                    )}
+                  </div>
+
+                  <div className="comments-divider" />
+                  <div style={{ marginTop: 12 }}>
+                    {comments.length === 0 && <p className="muted">No comments yet.</p>}
+                    {comments.map(c => (
+                      <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
+                        {c.avatarUrl ? <img src={c.avatarUrl} alt="avatar" width={36} height={36} style={{ borderRadius: '50%' }} /> : <div style={{ width: 36 }} />}
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <div style={{ fontWeight: 600 }}>{c.username}</div>
+                            <div className="muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: 12 }}>{new Date(c.createdAt).toLocaleString()}</div>
+                            {user && c.userId && String(c.userId) === String(user.userId) && (
+                              <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
+                                <button
+                                  className="comment-action-icon"
+                                  title="Edit comment"
+                                  aria-label="Edit comment"
+                                  onClick={() => { setEditingId(c.id); setEditingText(c.text); }}
+                                >
+                                  <i className="fa-solid fa-pen" aria-hidden="true"></i>
+                                </button>
+                                <button
+                                  className="comment-action-icon"
+                                  title="Delete comment"
+                                  aria-label="Delete comment"
+                                  onClick={async () => {
+                                    try {
+                                      const ok = await confirm('Delete this comment?');
+                                      if (!ok) return;
+                                      const r = await apiDeleteComment(model.id, c.id);
+                                      if (r?.ok) {
+                                        setComments(prev => prev.filter(x => x.id !== c.id));
+                                        try { showToast('Comment deleted'); } catch {}
+                                      }
+                                    } catch (_) {}
+                                  }}
+                                >
+                                  <i className="fa-solid fa-trash" aria-hidden="true"></i>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+
+                          {editingId === c.id ? (
+                            <div style={{ marginTop: 8 }}>
+                              <textarea
+                                ref={editRef}
+                                value={editingText}
+                                onChange={(e) => { setEditingText(e.target.value); autoResizeTextarea(e.target); }}
+                                rows={1}
+                                className="comment-input"
+                                style={{ borderBottom: '1px solid var(--border)' }}
+                              />
+                              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                                <button className="btn primary" onClick={async () => {
+                                  if (!editingText || !editingText.trim()) return;
+                                  try {
+                                    const r = await apiEditComment(model.id, c.id, editingText.trim());
+                                    if (r?.comment) {
+                                      setComments(prev => prev.map(p => p.id === c.id ? r.comment : p));
+                                      setEditingId(null);
+                                      setEditingText('');
+                                      try { showToast('Comment updated'); } catch {}
+                                    }
+                                  } catch (_) {}
+                                }}>Save</button>
+                                <button className="btn" onClick={() => { setEditingId(null); setEditingText(''); }}>Cancel</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="muted" style={{ marginTop: 6 }}>{c.text}</div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
-        </div>
 
         <aside className="detail-side">
           {model.publishedAt && (
@@ -447,6 +755,8 @@ export default function ModelDetail() {
               Published {new Date(model.publishedAt).toLocaleDateString()}
             </div>
           )}
+
+          {/* like/favorite controls now live inside the viewer overlay */}
 
           <div className="description" style={{ marginBottom: 12 }}>
             <h3 style={{ margin: '0 0 6px' }}>Description</h3>

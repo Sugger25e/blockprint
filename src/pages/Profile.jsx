@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { getMyFavorites, getMyLikes } from '../utils/modelActions';
+import { useConfirm, useToast } from '../context/UiContext';
+import ModelCard from '../components/ModelCard';
 
 export default function Profile() {
   const { user, loading, login, logout } = useAuth();
   const [subs, setSubs] = useState([]);
   const [busyId, setBusyId] = useState(null);
+  const [favorites, setFavorites] = useState([]);
+  const [likesCount, setLikesCount] = useState(0);
+  const { confirm } = useConfirm();
+  const { showToast } = useToast();
 
   const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
 
@@ -23,13 +30,33 @@ export default function Profile() {
     return () => { cancelled = true; };
   }, [user, API_BASE]);
 
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const fav = await getMyFavorites();
+        if (!cancelled && fav?.favorites) setFavorites(fav.favorites || []);
+      } catch (_) {}
+      try {
+        const likes = await getMyLikes();
+        if (!cancelled) setLikesCount(typeof likes.count === 'number' ? likes.count : 0);
+      } catch (_) {}
+    })();
+    return () => { cancelled = true; };
+  }, [user]);
+
   const onDelete = async (id) => {
-    if (!window.confirm('Delete this submission? This cannot be undone.')) return;
+    try {
+      const ok = await confirm('Delete this submission? This cannot be undone.');
+      if (!ok) return;
+    } catch (_) { return; }
     setBusyId(id);
     try {
       const res = await fetch(`${API_BASE}/api/my/submissions/${id}`, { method: 'DELETE', credentials: 'include' });
       if (res.ok) {
         setSubs(prev => prev.filter(s => s.id !== id));
+        try { showToast('Submission deleted'); } catch {}
       }
     } catch (_) {}
     setBusyId(null);
@@ -90,6 +117,27 @@ export default function Profile() {
           ))}
         </div>
       )}
+
+      <div style={{ marginTop: 24 }}>
+        <h3>Your profile</h3>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
+          <div style={{ fontWeight: 600 }}>Liked models</div>
+          <div className="muted">{likesCount}</div>
+        </div>
+
+        <div style={{ marginTop: 12 }}>
+          <h4>Your favorites</h4>
+          {favorites.length === 0 ? (
+            <p className="muted">You have no favorites yet.</p>
+          ) : (
+            <div className="grid" style={{ gap: 12 }}>
+              {favorites.map(m => (
+                <ModelCard key={m.id} model={m} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

@@ -155,7 +155,68 @@ body, .navbar, .model-card, .detail-viewer, .mobile-menu, .btn, .page, .detail, 
 .back-btn:active { transform: translateY(0); box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 .back-btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in sRGB, var(--accent) 24%, transparent); border-color: var(--accent); }
 .detail-layout { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 20px; align-items: start; }
-.detail-viewer { margin-top: 16px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--viewer-bg); }
+.detail-viewer { position: relative; margin-top: 16px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--viewer-bg); }
+
+/* Viewer overlay controls (like / favorite) */
+.viewer-controls { position: absolute; top: 12px; right: 12px; display: flex; gap: 6px; flex-direction: row; z-index: 40; }
+.viewer-controls .icon-btn { width: 34px; height: 34px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; background: transparent; color: var(--text); border: none; box-shadow: none; transition: transform 160ms cubic-bezier(.2,.9,.2,1), opacity 140ms ease, color 140ms ease, filter 160ms ease; }
+.viewer-controls .icon-btn:active { transform: scale(0.94); }
+.viewer-controls .icon-btn .fa-fw { font-size: 16px; }
+.viewer-controls .icon-heart { color: inherit; }
+.viewer-controls .icon-heart.active { color: #ef4444; filter: drop-shadow(0 6px 18px rgba(239,68,68,0.12)); }
+.viewer-controls .icon-star { color: inherit; }
+.viewer-controls .icon-star.active { color: #f59e0b; filter: drop-shadow(0 6px 18px rgba(245,158,11,0.12)); }
+
+/* small pop animation when interacting */
+/* smoother pop / bounce animation: quick grow then subtle settle */
+@keyframes popPulse { 0% { transform: scale(1); } 30% { transform: scale(1.22); } 50% { transform: scale(0.98); } 100% { transform: scale(1); } }
+.pop-anim { animation: popPulse 300ms cubic-bezier(.2,.9,.2,1); transform-origin: center; }
+
+/* Comment composer input: no background, thin underline */
+.comment-input {
+  border: none;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  padding: 8px 6px;
+  border-radius: 0;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 14px;
+  outline: none;
+}
+.comment-input:focus {
+  border-bottom-color: var(--accent);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+
+/* Auto-resizing textarea specifics */
+.comment-input { width: 100%; resize: none; overflow: hidden; min-height: 40px; }
+
+/* Small icon-only action buttons for comments (edit/delete) */
+.comment-action-icon {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  transition: color 140ms ease, transform 120ms ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.comment-action-icon:hover { color: var(--text); transform: translateY(-1px); }
+.comment-action-icon:active { transform: translateY(0); }
+
+/* Divider between composer and comments list */
+.comments-divider { height: 1px; background: var(--border); margin: 12px 0; border-radius: 1px; }
+
+/* tiny badge for like counts overlayed on the viewer */
+.viewer-like-badge { position: absolute; top: 12px; left: 12px; background: color-mix(in sRGB, var(--card) 96%, transparent); border: 1px solid var(--border); padding: 4px 8px; border-radius: 999px; font-size: 13px; color: var(--text); box-shadow: 0 6px 18px rgba(0,0,0,0.08); z-index: 39; }
+
+/* model card like badge */
+.model-like-badge { position: absolute; left: 10px; bottom: 8px; background: color-mix(in sRGB, var(--card) 96%, transparent); border: 1px solid var(--border); padding: 6px 8px; border-radius: 999px; font-size: 13px; color: var(--text); display: inline-flex; gap: 6px; align-items: center; z-index: 20; box-shadow: 0 6px 18px rgba(0,0,0,0.08); }
+.model-card-viewer { position: relative; }
 .detail-side { margin-top: 16px; }
 .detail-desc { color: var(--text); }
 .detail-info { margin-top: 12px; color: var(--muted); }
@@ -393,6 +454,29 @@ label { font-weight: 600; color: var(--text); }
 .modal { background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 12px; padding: 16px; width: min(520px, 92vw); box-shadow: 0 18px 42px rgba(0,0,0,0.18); animation: scaleIn 200ms ease-out both; }
 .modal-head { font-size: 18px; margin-bottom: 6px; }
 @keyframes scaleIn { from { transform: translateY(4px) scale(0.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+
+/* Confirm dialog popup animation: a quick pop/overshoot then settle */
+@keyframes confirmPop {
+  0% { transform: translateY(6px) scale(0.98); opacity: 0; }
+  50% { transform: translateY(-6px) scale(1.06); opacity: 1; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+.confirm-pop { animation: confirmPop 220ms cubic-bezier(.2,.9,.2,1) both; transform-origin: center; }
+
+/* Toast enter animation */
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.toast-item { animation: toastIn 320ms cubic-bezier(.2,.9,.2,1) both; }
+.toast-item { max-width: 720px; }
+
+/* Toast exit animation (played when closing). Keep duration in sync with JS TOAST_EXIT_MS */
+@keyframes toastOut {
+  from { opacity: 1; transform: translateY(0); }
+  to { opacity: 0; transform: translateY(8px); }
+}
+.toast-exit { animation: toastOut 220ms cubic-bezier(.2,.9,.2,1) both; }
 
 /* Pager styles and entrance animation */
 .pager { display: flex; gap: 8px; align-items: center; animation: pagerIn 260ms cubic-bezier(.2,.9,.2,1) both; }

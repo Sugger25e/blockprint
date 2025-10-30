@@ -1,9 +1,11 @@
 import './App.css';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import React from 'react';
 import { ModelsProvider } from './context/ModelsContext';
 import { ViewerStateProvider } from './context/ViewerStateContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
+import { UiProvider } from './context/UiContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
@@ -21,6 +23,7 @@ function App() {
     <BrowserRouter>
       <ThemeProvider>
         <AuthProvider>
+          <UiProvider>
           <ModelsProvider>
             <ViewerStateProvider>
               <div className="app-shell">
@@ -46,6 +49,7 @@ function App() {
               </div>
             </ViewerStateProvider>
           </ModelsProvider>
+          </UiProvider>
         </AuthProvider>
       </ThemeProvider>
     </BrowserRouter>

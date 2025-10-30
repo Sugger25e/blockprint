@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getBuildStats } from '../utils/modelActions';
 
 export default function ModelCard({ model, actionLabel, onAction }) {
   const { id, name, description, url, categories, previewImage, previewImageUrl } = model;
@@ -7,6 +8,18 @@ export default function ModelCard({ model, actionLabel, onAction }) {
   const navigate = useNavigate();
 
   const imgSrc = previewImage || previewImageUrl || null;
+  const [likeCount, setLikeCount] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const s = await getBuildStats(id);
+        if (!cancelled && s) setLikeCount(typeof s.likeCount === 'number' ? s.likeCount : null);
+      } catch (_) {}
+    })();
+    return () => { cancelled = true; };
+  }, [id]);
 
   const openDetails = () => navigate(`/model/${encodeURIComponent(String(id))}`);
 
@@ -26,6 +39,12 @@ export default function ModelCard({ model, actionLabel, onAction }) {
           <div className="viewer-spinner" aria-hidden="true" style={{ width: '100%', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div className="spinner-ring" aria-hidden="true"></div>
             <span className="sr-only">Loading preview</span>
+          </div>
+        )}
+        {typeof likeCount === 'number' && (
+          <div className="model-like-badge" title={`${likeCount} likes`}>
+            <i className="fa-solid fa-heart" style={{ color: '#ef4444', fontSize: 13 }} aria-hidden="true"></i>
+            <span style={{ fontSize: 13 }}>{likeCount}</span>
           </div>
         )}
       </div>

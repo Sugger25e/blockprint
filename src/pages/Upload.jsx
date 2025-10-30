@@ -1,9 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/UiContext';
 import ModelViewer from '../components/ModelViewer';
 
 export default function Upload() {
   const { user, loading, login } = useAuth();
+  const { showToast } = useToast();
   // Meta tags for Upload page
   useEffect(() => {
     const title = 'Upload a Build — Blockprint';
@@ -56,6 +58,10 @@ export default function Upload() {
   const submitLock = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cooldown, setCooldown] = useState(false);
+  const hcaptchaWidgetIdRef = useRef(null);
+  const hcaptchaContainerRef = useRef(null);
+  const pendingFormRef = useRef(null);
+  const HCAPTCHA_SITEKEY = process.env.REACT_APP_HCAPTCHA_SITEKEY;
 
   const toggleCategory = (val) => {
     if (categories.includes(val)) {
@@ -109,11 +115,50 @@ export default function Upload() {
       try { form.append('materials', JSON.stringify(materialsPreview)); } catch(_) {}
     }
     try {
-  const res = await fetch(`${API_BASE}/api/submissions`, { method: 'POST', body: form, credentials: 'include' });
+      // If hCaptcha is configured, use invisible widget flow
+      if (HCAPTCHA_SITEKEY && window && window.hcaptcha) {
+        pendingFormRef.current = form;
+        // render widget if needed
+        if (hcaptchaWidgetIdRef.current == null) {
+          try {
+            hcaptchaWidgetIdRef.current = window.hcaptcha.render(hcaptchaContainerRef.current, {
+              sitekey: HCAPTCHA_SITEKEY,
+              size: 'invisible',
+              callback: async (token) => {
+                try {
+                  const fd = pendingFormRef.current;
+                  if (!fd) return;
+                  fd.append('hcaptchaToken', token);
+                  const res = await fetch(`${API_BASE}/api/submissions`, { method: 'POST', body: fd, credentials: 'include' });
+                  if (!res.ok) throw new Error('Failed');
+                  setStatus('success');
+                  setName(''); setDescription(''); setCategories([]);
+                  setShowSuccess(true);
+                  try { showToast('Submission posted'); } catch {}
+                } catch (err) {
+                  console.error('Submission via hcaptcha failed', err);
+                  setStatus('error');
+                } finally {
+                  pendingFormRef.current = null;
+                  setIsSubmitting(false);
+                  submitLock.current = false;
+                  setCooldown(true);
+                  setTimeout(() => setCooldown(false), 1200);
+                  try { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); } catch {}
+                }
+              }
+            });
+          } catch (e) { console.error('hcaptcha render failed', e); }
+        }
+        try { window.hcaptcha.execute(hcaptchaWidgetIdRef.current); } catch (e) { console.error('hcaptcha execute failed', e); }
+        return;
+      }
+
+      const res = await fetch(`${API_BASE}/api/submissions`, { method: 'POST', body: form, credentials: 'include' });
       if (!res.ok) throw new Error('Failed');
-    setStatus('success');
-  // reset some fields but keep files visible
-  setName(''); setDescription(''); setCategories([]);
+      setStatus('success');
+      // reset some fields but keep files visible
+      setName(''); setDescription(''); setCategories([]);
       setShowSuccess(true);
     } catch (e) {
       setStatus('error');
@@ -141,6 +186,24 @@ export default function Upload() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // Load hCaptcha script when sitekey is configured
+  useEffect(() => {
+    if (!HCAPTCHA_SITEKEY) return;
+    if (typeof window === 'undefined') return;
+    if (window.hcaptcha) return;
+    const id = 'hcaptcha-script';
+    if (document.getElementById(id)) return;
+    const s = document.createElement('script');
+    s.src = 'https://js.hcaptcha.com/1/api.js';
+    s.async = true;
+    s.defer = true;
+    s.id = id;
+    s.onload = () => {};
+    s.onerror = () => { console.error('Failed to load hcaptcha script'); };
+    document.head.appendChild(s);
+    return () => {};
+  }, [HCAPTCHA_SITEKEY]);
 
   // Parse materials from selected .mcstructure for on-page preview
   useEffect(() => {
