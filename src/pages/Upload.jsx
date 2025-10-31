@@ -42,6 +42,13 @@ export default function Upload() {
 
   // Preview URL for selected .glb file (object URL). Created when a file is selected and revoked on change/unmount.
   const [glbPreviewUrl, setGlbPreviewUrl] = useState(null);
+  // ref to underlying ModelViewer so we can capture a PNG preview
+  const viewerRef = useRef(null);
+  // Generated preview (blob + object URL) that will be included in the final submission if present
+  const [previewFile, setPreviewFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewGenerating, setPreviewGenerating] = useState(false);
+  // (no unsaved-toast on Upload page)
   useEffect(() => {
     if (!glbFile) {
       setGlbPreviewUrl(null);
@@ -54,13 +61,24 @@ export default function Upload() {
       setGlbPreviewUrl(null);
     };
   }, [glbFile]);
+
+  // Revoke preview object URL when previewFile changes or on unmount
+  useEffect(() => {
+    return () => {
+      try { if (previewUrl) URL.revokeObjectURL(previewUrl); } catch (e) {}
+    };
+  }, [previewUrl]);
+
+  // no unsaved-change toast needed on Upload page
   // Anti-duplicate submit: lock while request is in-flight and keep a short cooldown after
   const submitLock = useRef(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [cooldown, setCooldown] = useState(false);
   const hcaptchaWidgetIdRef = useRef(null);
   const hcaptchaContainerRef = useRef(null);
+  const modalHcaptchaContainerRef = useRef(null);
   const pendingFormRef = useRef(null);
+  const [showCaptchaDialog, setShowCaptchaDialog] = useState(false);
   const HCAPTCHA_SITEKEY = process.env.REACT_APP_HCAPTCHA_SITEKEY;
 
   const toggleCategory = (val) => {
@@ -110,27 +128,20 @@ export default function Upload() {
     // credits are derived from the authenticated session server-side
     form.append('glb', glbFile);
     form.append('mcstructure', mcstructureFile);
+    // include generated preview image if present
+    if (previewFile) form.append('preview', previewFile, 'preview.png');
     // Optionally include client-side materials preview to help backend (server may recompute canonical list)
     if (Array.isArray(materialsPreview) && materialsPreview.length > 0) {
       try { form.append('materials', JSON.stringify(materialsPreview)); } catch(_) {}
     }
     try {
-      // If hCaptcha is configured, require visible checkbox verification and read token
-      if (HCAPTCHA_SITEKEY && window && window.hcaptcha) {
-        if (hcaptchaWidgetIdRef.current == null) {
-          showToast('Captcha not ready');
-          setIsSubmitting(false);
-          submitLock.current = false;
-          return;
-        }
-        const token = window.hcaptcha.getResponse(hcaptchaWidgetIdRef.current);
-        if (!token) {
-          showToast('Please complete the captcha');
-          setIsSubmitting(false);
-          submitLock.current = false;
-          return;
-        }
-        form.append('hcaptchaToken', token);
+      // If hCaptcha is configured, open a modal with the visible widget and complete captcha there.
+      if (HCAPTCHA_SITEKEY && typeof window !== 'undefined' && window.hcaptcha) {
+  pendingFormRef.current = { name: name.trim(), description: description.trim(), categories: finalCategories, authorName: authorName && String(authorName).trim(), glbFile, mcstructureFile, materialsPreview, previewFile };
+        setShowCaptchaDialog(true);
+        setIsSubmitting(false);
+        submitLock.current = false;
+        return;
       }
 
       const res = await fetch(`${API_BASE}/api/submissions`, { method: 'POST', body: form, credentials: 'include' });
@@ -150,6 +161,36 @@ export default function Upload() {
       setTimeout(() => setCooldown(false), 1200);
     }
   };
+
+  // Capture a PNG from the ModelViewer and store it as a preview to include with the submission
+  async function handleGeneratePreview() {
+    if (!viewerRef || !viewerRef.current) {
+      try { showToast('Viewer not ready'); } catch(_) {}
+      return;
+    }
+    setPreviewGenerating(true);
+    try {
+      const blob = await viewerRef.current.capture({ quality: 1.0, scale: 2 });
+      if (!blob) throw new Error('Capture failed');
+      const url = URL.createObjectURL(blob);
+      // revoke previous preview URL if any
+      try { if (previewUrl) URL.revokeObjectURL(previewUrl); } catch (_) {}
+      setPreviewFile(blob);
+      setPreviewUrl(url);
+      try { showToast('Preview generated — it will be uploaded with your submission'); } catch (_) {}
+    } catch (e) {
+      console.error('preview capture failed', e);
+      try { showToast('Could not generate preview'); } catch (_) {}
+    } finally {
+      setPreviewGenerating(false);
+    }
+  }
+
+  function handleClearPreview() {
+    try { if (previewUrl) URL.revokeObjectURL(previewUrl); } catch (_) {}
+    setPreviewFile(null);
+    setPreviewUrl(null);
+  }
 
   // Fetch server alias map so local preview applies the same canonicalization as backend
   useEffect(() => {
@@ -185,22 +226,23 @@ export default function Upload() {
     return () => {};
   }, [HCAPTCHA_SITEKEY]);
 
-  // Render visible hCaptcha checkbox widget into the form when ready
+  // Render visible hCaptcha checkbox widget into a modal container when the captcha dialog is shown
   useEffect(() => {
     if (!HCAPTCHA_SITEKEY) return;
+    if (!showCaptchaDialog) return;
     if (typeof window === 'undefined') return;
     let mounted = true;
     const tryRender = () => {
       if (!mounted) return;
-      if (!hcaptchaContainerRef.current) return;
+      if (!modalHcaptchaContainerRef.current) return;
       if (!window.hcaptcha) return;
       if (hcaptchaWidgetIdRef.current != null) return;
       try {
-        hcaptchaWidgetIdRef.current = window.hcaptcha.render(hcaptchaContainerRef.current, {
+        hcaptchaWidgetIdRef.current = window.hcaptcha.render(modalHcaptchaContainerRef.current, {
           sitekey: HCAPTCHA_SITEKEY,
           size: 'normal',
           callback: () => {
-            // visible widget will set response; we'll call getResponse when submitting
+            // visible widget will set response; we read it when the user clicks Post in the modal
           }
         });
       } catch (e) {
@@ -211,7 +253,7 @@ export default function Upload() {
     const poll = setInterval(tryRender, 300);
     const to = setTimeout(() => clearInterval(poll), 5000);
     return () => { mounted = false; clearInterval(poll); clearTimeout(to); };
-  }, [HCAPTCHA_SITEKEY]);
+  }, [HCAPTCHA_SITEKEY, showCaptchaDialog]);
 
   // Parse materials from selected .mcstructure for on-page preview
   useEffect(() => {
@@ -471,18 +513,41 @@ export default function Upload() {
           </div>
         </div>
 
-        <div className="field-row">
+       <div className="field-row">
           <div className="field">
-            <label>.glb file (3D preview) <span className="req">*</span></label>
-            <input className={`input-file ${submitted && errors.glb ? 'input-error' : ''}`} type="file" accept=".glb,.GLB" onChange={(e) => setGlbFile(e.target.files?.[0] || null)} disabled={!user} />
+            <label>.glb file (3D preview)</label>
+            <input type="file" accept=".glb,.GLB" onChange={(e)=>setGlbFile(e.target.files?.[0]||null)} />
             {glbFile && <div className="file-meta">{glbFile.name} • {(glbFile.size/1024/1024).toFixed(2)} MB</div>}
-            {submitted && errors.glb && <div className="error-text">{errors.glb}</div>}
-            {/* Inline preview of the selected .glb file */}
-            {glbPreviewUrl && (
-              <div className="glb-preview" style={{ marginTop: 12 }}>
-                <ModelViewer url={glbPreviewUrl} fitMargin={1.0} background={'var(--viewer-bg)'} />
+            <div style={{ marginTop: 8 }}>
+              <div style={{ display: 'flex', gap: 12, width: '100%', maxWidth: 920, height: 280, minHeight: 280, maxHeight: 280, boxSizing: 'border-box', overflow: 'hidden' }}>
+                {/* Left: model viewer - take half the width */}
+                <div style={{ flex: 1, minWidth: 0, minHeight: 0, height: '100%', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', display: 'flex' }}>
+                  {glbPreviewUrl ? (
+                    <ModelViewer url={glbPreviewUrl} fitMargin={4.0} background={'var(--viewer-bg)'} ref={(el)=>{ if (el) viewerRef.current = el; }} style={{ width: '100%', height: '100%' }} />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>No model selected</div>
+                  )}
+                </div>
+
+                {/* Right: preview area - take half the width */}
+                <div style={{ flex: 1, minWidth: 0, height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                    { (previewUrl) ? (
+                      <img src={previewUrl} alt="Preview" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }} />
+                    ) : (
+                      <div className="muted" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: '1px dashed var(--border)' }}>No preview</div>
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button type="button" className="btn" onClick={handleGeneratePreview} disabled={previewGenerating}>{previewGenerating ? 'Generating…' : 'Generate preview image'}</button>
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{ previewUrl ? 'Unsaved' : '' }</div>
+                  </div>
+                </div>
               </div>
-            )}
+              {/* Responsive fallback: on narrow screens stack visually via CSS (keeps inline styles simple) */}
+            </div>
           </div>
         </div>
 
@@ -561,8 +626,8 @@ export default function Upload() {
           </div>
         </div>
 
-        {/* Visible hCaptcha checkbox (if configured) */}
-        <div style={{ marginTop: 12 }} ref={hcaptchaContainerRef} />
+  {/* Captcha is shown in a modal popup (like comments). The inline container was removed. */}
+
         <div className="field-row">
           <button
             className="btn primary"
@@ -575,6 +640,56 @@ export default function Upload() {
           </button>
         </div>
       </form>
+
+      {/* Captcha modal for Upload submissions (shown when configured) */}
+      {showCaptchaDialog && (
+        <div role="dialog" aria-modal="true" className="modal-backdrop" style={{ zIndex: 2200 }} onClick={() => { if (isSubmitting) return; setShowCaptchaDialog(false); try { if (hcaptchaWidgetIdRef.current != null) { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); hcaptchaWidgetIdRef.current = null; } } catch (e) {} }}>
+          <div className="modal confirm-pop captcha-modal" style={{ maxWidth: 540, width: '92%' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-head">Please verify you are human</div>
+            <div className="muted" style={{ marginBottom: 12 }}>Complete the captcha below to confirm you're not a bot.</div>
+            <div ref={modalHcaptchaContainerRef} className="hcaptcha-widget" style={{ marginBottom: 12 }} />
+            <div className="modal-actions" style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+              <button className="btn" disabled={isSubmitting} onClick={() => { if (isSubmitting) return; setShowCaptchaDialog(false); try { if (hcaptchaWidgetIdRef.current != null) { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); hcaptchaWidgetIdRef.current = null; } } catch (e) {} }}>Cancel</button>
+              <button className="btn primary" disabled={isSubmitting} onClick={async () => {
+                if (!window || !window.hcaptcha || hcaptchaWidgetIdRef.current == null) { showToast('Captcha not ready'); return; }
+                const token = window.hcaptcha.getResponse(hcaptchaWidgetIdRef.current);
+                if (!token) { showToast('Please complete the captcha'); return; }
+                // Build form from pending values
+                const p = pendingFormRef.current || {};
+                const fd = new FormData();
+                fd.append('name', p.name || '');
+                fd.append('description', p.description || '');
+                (p.categories || []).forEach(c => fd.append('categories', c));
+                if (p.authorName) fd.append('author', p.authorName);
+                if (p.glbFile) fd.append('glb', p.glbFile);
+                if (p.mcstructureFile) fd.append('mcstructure', p.mcstructureFile);
+                if (p.previewFile) fd.append('preview', p.previewFile, 'preview.png');
+                if (Array.isArray(p.materialsPreview) && p.materialsPreview.length > 0) {
+                  try { fd.append('materials', JSON.stringify(p.materialsPreview)); } catch (_) {}
+                }
+                fd.append('hcaptchaToken', token);
+                setIsSubmitting(true);
+                try {
+                  const res = await fetch(`${process.env.REACT_APP_API_BASE}/api/submissions`, { method: 'POST', body: fd, credentials: 'include' });
+                  if (!res.ok) throw new Error('Failed');
+                  setStatus('success');
+                  setName(''); setDescription(''); setCategories([]);
+                  setShowSuccess(true);
+                  try { showToast('Submission posted'); } catch {}
+                } catch (err) {
+                  console.error('submission failed', err);
+                  setStatus('error');
+                } finally {
+                  setIsSubmitting(false);
+                  setShowCaptchaDialog(false);
+                  try { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); } catch (e) {}
+                  hcaptchaWidgetIdRef.current = null;
+                }
+              }}>{isSubmitting ? 'Posting…' : 'Post'}</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showSuccess && (
         <div className="modal-backdrop" onClick={() => setShowSuccess(false)}>

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import { useModels } from '../context/ModelsContext';
 import ModelViewer from '../components/ModelViewer';
 import { useAuth } from '../context/AuthContext';
@@ -415,7 +415,10 @@ export default function ModelDetail() {
       return (
         <div className="detail" style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
           <div className="detail-header">
-            <Link className="back-btn" to="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></Link>
+            <a className="back-btn" href="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></a>
+              <a className="back-btn" href="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></a>
+              <a className="btn" href="/">Back to Discover</a>
+              <a className="btn" href="/">Back to Discover</a>
             <h2>Loading…</h2>
           </div>
           <div className="detail-layout" style={{ gap: 32 }}>
@@ -445,7 +448,8 @@ export default function ModelDetail() {
     return (
       <div className="detail" style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
         <div className="detail-header">
-          <Link className="back-btn" to="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></Link>
+          <a className="back-btn" href="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></a>
+            <a className="back-btn" href="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></a>
           <h2>Model</h2>
         </div>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '24px' }}>
@@ -456,7 +460,7 @@ export default function ModelDetail() {
               It may have been removed or isn’t published yet. Try going back or visiting the Discover page.
             </p>
             <div style={{ marginTop: 16 }}>
-              <Link className="btn" to="/">Back to Discover</Link>
+              <a className="btn" href="/">Back to Discover</a>
             </div>
           </div>
         </div>
@@ -472,7 +476,8 @@ export default function ModelDetail() {
   return (
     <div className="detail" style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="detail-header">
-        <Link className="back-btn" to="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></Link>
+  <a className="back-btn" href="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></a>
+    <a className="back-btn" href="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></a>
         <h2 title={model.name}>{model.name}</h2>
       </div>
 
@@ -836,14 +841,13 @@ export default function ModelDetail() {
 
           {/* like/favorite controls now live inside the viewer overlay */}
 
-          <div className="description" style={{ marginBottom: 12 }}>
-            <h3 style={{ margin: '0 0 6px' }}>Description</h3>
+          <div className="description" style={{ marginBottom: 4 }}>
             <p className="detail-desc">{model.description || 'No description provided.'}</p>
           </div>
 
           {Array.isArray(model.categories) && model.categories.length > 0 && (
             <div className="categories" style={{ marginTop: 12 }}>
-              <h3 style={{ margin: '0 0 6px' }}>Categories</h3>
+              <h3 style={{ margin: '0 0 6px' }}>Tags</h3>
               <div className="tags">
                 {model.categories.map((c, idx) => (
                   <span className="tag" key={idx}>{c}</span>

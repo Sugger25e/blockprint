@@ -16,6 +16,8 @@ import About from './pages/About';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
 import Admin from './pages/Admin';
+import ManageEdit from './pages/ManageEdit';
+import ProfileManage from './pages/ProfileManage';
 import NotFound from './pages/NotFound';
 
 function App() {
@@ -42,6 +44,8 @@ function App() {
                     <Route path="/privacy" element={<Privacy />} />
                     <Route path="/model/:id" element={<ModelDetail />} />
                     <Route path="/admin" element={<Admin />} />
+                    <Route path="/admin/manage/:id" element={<ManageEdit />} />
+                    <Route path="/profile/:userid/manage/:id" element={<ProfileManage />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </main>

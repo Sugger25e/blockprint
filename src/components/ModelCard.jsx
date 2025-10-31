@@ -1,12 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import useReloadableNavigate from '../utils/useReloadableNavigate';
 import { getBuildStats } from '../utils/modelActions';
 
-export default function ModelCard({ model, actionLabel, onAction }) {
+export default function ModelCard({ model, actionLabel, onAction, managePath, showStatus, createdAt }) {
   // model may include either `previewImage` or `previewImageUrl` depending on server response
-  const { id, name, description, url, categories, previewImage, previewImageUrl } = model;
-  const author = typeof model.credits === 'string' ? model.credits : model.credits?.author;
-  const navigate = useNavigate();
+  const { id, name, description, url, categories, previewImage, previewImageUrl, ready } = model;
+  const navigate = useReloadableNavigate();
 
   const imgSrc = previewImage || previewImageUrl || null;
   const [likeCount, setLikeCount] = useState(null);
@@ -24,6 +23,20 @@ export default function ModelCard({ model, actionLabel, onAction }) {
 
   const openDetails = () => navigate(`/model/${encodeURIComponent(String(id))}`);
 
+  const statusLabel = (() => {
+    if (!showStatus) return null;
+    // Normalize possible server flags into Approved / Pending / Rejected
+    // Supported shapes: model.ready (boolean), model.rejected (boolean), model.status ('approved'|'pending'|'rejected')
+    if (model.rejected === true || String(model.status).toLowerCase() === 'rejected') return 'Rejected';
+    if (model.ready === true || String(model.status).toLowerCase() === 'approved') return 'Approved';
+    if (model.ready === false || String(model.status).toLowerCase() === 'pending') return 'Pending';
+    return null;
+  })();
+
+  // Determine if image should act as a quick link. When showStatus is enabled and the
+  // model is Approved we prefer explicit View/Manage buttons and avoid implicit image nav.
+  const imageClickable = !(showStatus && statusLabel === 'Approved');
+
   return (
     <div className="model-card" draggable={false} onDragStart={(e) => e.preventDefault()}>
       <div className="model-card-viewer" draggable={false}>
@@ -33,8 +46,8 @@ export default function ModelCard({ model, actionLabel, onAction }) {
             alt={`${name} preview`}
             loading="lazy"
             className="model-card-screenshot"
-            onClick={openDetails}
-            style={{ width: '100%', height: '200px', objectFit: 'cover', cursor: 'pointer', background: 'transparent' }}
+            onClick={imageClickable ? openDetails : undefined}
+            style={{ width: '100%', height: '200px', objectFit: 'cover', cursor: imageClickable ? 'pointer' : 'default', background: 'transparent' }}
           />
         ) : (
           <div className="viewer-spinner" aria-hidden="true" style={{ width: '100%', height: '200px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -52,8 +65,15 @@ export default function ModelCard({ model, actionLabel, onAction }) {
 
       <div className="model-card-info">
         <div>
-          <div className="model-card-title" title={name}>{name}</div>
-          {author && <div className="model-card-author muted">by {author}</div>}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+            <div className="model-card-title" title={name} style={{ flex: 1 }}>{name}</div>
+            {statusLabel && <div style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{statusLabel}</div>}
+          </div>
+          {/* Show creation / publish date (muted) when provided */}
+          {createdAt && (
+            <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{new Date(createdAt).toLocaleString()}</div>
+          )}
+          {/* author removed per design: don't show author on cards */}
           {description && <div className="model-card-desc" title={description}>{description}</div>}
           {Array.isArray(categories) && categories.length > 0 && (
             <div className="tags">
@@ -71,9 +91,40 @@ export default function ModelCard({ model, actionLabel, onAction }) {
             {actionLabel || 'Action'}
           </button>
         ) : (
-          <button className="btn" onClick={openDetails}>
-            View details
-          </button>
+          // When showStatus is enabled, follow explicit rules:
+          // - Pending => only show Manage
+          // - Approved => show View + Manage
+          // - Rejected => show nothing
+          showStatus ? (() => {
+            if (!statusLabel) return null;
+            if (statusLabel === 'Rejected') return null;
+            if (statusLabel === 'Pending') {
+              return managePath ? (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn" onClick={() => navigate(managePath)}>Manage</button>
+                </div>
+              ) : null;
+            }
+            if (statusLabel === 'Approved') {
+              return (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn" onClick={openDetails}>View</button>
+                  {managePath && <button className="btn" onClick={() => navigate(managePath)}>Manage</button>}
+                </div>
+              );
+            }
+            return null;
+          })() : (
+            // no showStatus: original fallback behaviour
+            managePath ? (
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn" onClick={openDetails}>View</button>
+                <button className="btn" onClick={() => navigate(managePath)}>Manage</button>
+              </div>
+            ) : (
+              <button className="btn" onClick={openDetails}>View details</button>
+            )
+          )
         )}
       </div>
     </div>

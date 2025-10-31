@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
+import useReloadableNavigate from '../utils/useReloadableNavigate';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 
@@ -21,51 +22,70 @@ export default function Navbar() {
     } catch (_) {}
     cb && cb();
   };
+  const isHome = location.pathname === '/';
+  const isUpload = location.pathname === '/upload';
+  const isAbout = location.pathname === '/about';
+  const isAdminPath = location.pathname.startsWith('/admin');
+  const isProfilePath = location.pathname.startsWith('/profile');
+
+  const navigate = useReloadableNavigate();
+
   return (
     <header className="navbar">
       <div className="nav-inner">
-        <Link to="/" className="brand">
+        <a href="/" className="brand" onClick={() => onAdminLeaveNavigate()}>
           <img src={process.env.PUBLIC_URL + '/logo.png'} alt="Blockprint" className="brand-logo" />
           <span className="brand-text">Blockprint</span>
-        </Link>
+        </a>
         <nav className="nav-links" aria-label="Primary">
-          <NavLink to="/" end className={({isActive}) => isActive ? 'active' : undefined} onClick={() => onAdminLeaveNavigate()}>Home</NavLink>
-          <NavLink to="/upload" className={({isActive}) => isActive ? 'active' : undefined} onClick={() => onAdminLeaveNavigate()}>Upload</NavLink>
-          <NavLink to="/about" className={({isActive}) => isActive ? 'active' : undefined} onClick={() => onAdminLeaveNavigate()}>About</NavLink>
+          <a href="/" className={isHome ? 'active' : undefined} onClick={() => onAdminLeaveNavigate()}>Home</a>
+          <a href="/upload" className={isUpload ? 'active' : undefined} onClick={() => onAdminLeaveNavigate()}>Upload</a>
+          <a href="/about" className={isAbout ? 'active' : undefined} onClick={() => onAdminLeaveNavigate()}>About</a>
           {/* Admin tab only for whitelisted admins */}
+          {/* Admin should navigate within SPA when switching tabs; use SPA navigate for admin tabs */}
           {!loading && user?.isAdmin && (
-            <NavLink to="/admin" className={({isActive}) => isActive ? 'active' : undefined}>Admin</NavLink>
+            <a href="/admin?tab=submissions" className={isAdminPath ? 'active' : undefined} onClick={(e) => { e.preventDefault(); onAdminLeaveNavigate(()=>navigate('/admin?tab=submissions')); }}>Admin</a>
           )}
         </nav>
-        <div className="nav-right">
-          <button
-            className={`theme-switch ${theme === 'dark' ? 'is-dark' : ''}`}
-            onClick={toggle}
-            aria-label="Toggle theme"
-            aria-pressed={theme === 'dark'}
-          >
-            <span className="switch-track">
-              <span className="switch-thumb">
-                <i className="fa-solid fa-sun sun-icon" aria-hidden="true"></i>
-                <i className="fa-solid fa-moon moon-icon" aria-hidden="true"></i>
+        <div className="nav-right" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* Keep the theme switch visually stable by fixing its box size */}
+          <div style={{ width: 56, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <button
+              className={`theme-switch ${theme === 'dark' ? 'is-dark' : ''}`}
+              onClick={toggle}
+              aria-label="Toggle theme"
+              aria-pressed={theme === 'dark'}
+            >
+              <span className="switch-track">
+                <span className="switch-thumb">
+                  <i className="fa-solid fa-sun sun-icon" aria-hidden="true"></i>
+                  <i className="fa-solid fa-moon moon-icon" aria-hidden="true"></i>
+                </span>
               </span>
-            </span>
-          </button>
-          {!loading && (
-            user ? (
+            </button>
+          </div>
+
+          {/* Reserve a fixed box for avatar / login to avoid layout jumps on reload */}
+          <div style={{ width: 56, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {loading ? (
+              <div className="skeleton" style={{ width: 32, height: 32, borderRadius: '50%' }} />
+            ) : user ? (
               <div className="user-menu">
-                <NavLink to="/profile" className="avatar-link" title={user.username} aria-label="Profile">
+                <a href="/profile" className="avatar-link" title={user.username} aria-label="Profile" onClick={() => onAdminLeaveNavigate()}>
                   {user.avatarUrl ? (
-                    <img src={user.avatarUrl} alt="Avatar" width={32} height={32} />
+                    <img src={user.avatarUrl} alt="Avatar" width={32} height={32} style={{ borderRadius: 999 }} />
                   ) : (
-                    <span className="avatar-fallback" aria-hidden="true">{(user.username || '?').charAt(0).toUpperCase()}</span>
+                    <span className="avatar-fallback" aria-hidden="true" style={{ width: 32, height: 32, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 999, background: 'var(--muted)', color: 'white' }}>{(user.username || '?').charAt(0).toUpperCase()}</span>
                   )}
-                </NavLink>
+                </a>
               </div>
             ) : (
-              <button className="btn small" onClick={login}><i className="fa-brands fa-discord" aria-hidden="true"></i> Login</button>
-            )
-          )}
+              /* show a compact icon-only login button to fit the reserved box */
+              <button className="btn small" onClick={login} title="Login" style={{ width: 36, height: 36, padding: 6, borderRadius: 999 }}>
+                <i className="fa-brands fa-discord" aria-hidden="true"></i>
+              </button>
+            )}
+          </div>
           <button
             className={`hamburger`}
             aria-label="Menu"
@@ -80,13 +100,13 @@ export default function Navbar() {
         </div>
       </div>
       <div id="mobile-menu" className={`mobile-menu ${open ? 'open' : ''}`}>
-        <NavLink to="/" end onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>Home</NavLink>
-  <NavLink to="/upload" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>Upload</NavLink>
-        <NavLink to="/about" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>About</NavLink>
+        <a href="/" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>Home</a>
+  <a href="/upload" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>Upload</a>
+        <a href="/about" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>About</a>
         {!loading && (user ? (
           <>
-            <NavLink to="/profile" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>My submissions</NavLink>
-            {user.isAdmin && <NavLink to="/admin" onClick={()=>{ setOpen(false); }}>Admin</NavLink>}
+            <a href="/profile" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>My submissions</a>
+            {user.isAdmin && <a href="/admin?tab=submissions" onClick={(e)=>{ e.preventDefault(); setOpen(false); onAdminLeaveNavigate(()=>navigate('/admin?tab=submissions')); }}>Admin</a>}
           </>
         ) : (
           <button className="btn" onClick={()=>{ setOpen(false); login(); }} style={{ marginTop: 8 }}><i className="fa-brands fa-discord" aria-hidden="true"></i> Login</button>

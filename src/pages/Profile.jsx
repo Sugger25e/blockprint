@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import useReloadableNavigate from '../utils/useReloadableNavigate';
 import { getMyFavorites, getMyLikes } from '../utils/modelActions';
 import { useConfirm, useToast } from '../context/UiContext';
 import ModelCard from '../components/ModelCard';
@@ -7,25 +8,53 @@ import ModelCard from '../components/ModelCard';
 export default function Profile() {
   const { user, loading, login, logout } = useAuth();
   const [subs, setSubs] = useState([]);
+  const [myBuilds, setMyBuilds] = useState([]);
+  const [dataLoading, setDataLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [favorites, setFavorites] = useState([]);
   const [likesCount, setLikesCount] = useState(0);
+  const [likesLoading, setLikesLoading] = useState(true);
   const { confirm } = useConfirm();
   const { showToast } = useToast();
+  const navigate = useReloadableNavigate();
 
   const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
 
   useEffect(() => {
     if (!user) return;
     let cancelled = false;
+    setDataLoading(true);
     (async () => {
       try {
-        const res = await fetch(`${API_BASE}/api/my/submissions`, { credentials: 'include' });
-        if (res.ok) {
-          const data = await res.json();
-          if (!cancelled) setSubs(Array.isArray(data?.submissions) ? data.submissions : []);
+        const [subsRes, buildsRes] = await Promise.all([
+          fetch(`${API_BASE}/api/my/submissions`, { credentials: 'include' }),
+          fetch(`${API_BASE}/api/my/builds`, { credentials: 'include' })
+        ]);
+
+        if (!cancelled) {
+          try {
+            if (subsRes && subsRes.ok) {
+              const data = await subsRes.json();
+              setSubs(Array.isArray(data?.submissions) ? data.submissions : []);
+            } else {
+              setSubs([]);
+            }
+          } catch (_) { setSubs([]); }
+
+          try {
+            if (buildsRes && buildsRes.ok) {
+              const data = await buildsRes.json();
+              setMyBuilds(Array.isArray(data?.builds) ? data.builds : []);
+            } else {
+              setMyBuilds([]);
+            }
+          } catch (_) { setMyBuilds([]); }
         }
-      } catch (_) {}
+      } catch (_) {
+        if (!cancelled) { setSubs([]); setMyBuilds([]); }
+      } finally {
+        if (!cancelled) setDataLoading(false);
+      }
     })();
     return () => { cancelled = true; };
   }, [user, API_BASE]);
@@ -39,9 +68,14 @@ export default function Profile() {
         if (!cancelled && fav?.favorites) setFavorites(fav.favorites || []);
       } catch (_) {}
       try {
+        setLikesLoading(true);
         const likes = await getMyLikes();
         if (!cancelled) setLikesCount(typeof likes.count === 'number' ? likes.count : 0);
-      } catch (_) {}
+      } catch (_) {
+        if (!cancelled) setLikesCount(0);
+      } finally {
+        if (!cancelled) setLikesLoading(false);
+      }
     })();
     return () => { cancelled = true; };
   }, [user]);
@@ -90,31 +124,55 @@ export default function Profile() {
         </div>
       </div>
 
-      {subs.length === 0 ? (
-        <div className="panel">
-          <p className="muted">You haven’t submitted any builds yet.</p>
-        </div>
+      {/* Submissions (pending) */}
+      {dataLoading ? (
+        <div className="panel"><p className="muted">Loading submissions…</p></div>
       ) : (
+        subs.length > 0 && (
         <div className="grid" style={{ gap: 12 }}>
           {subs.map(s => (
             <div key={s.id} className="card" style={{ padding: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-                <div>
-                  <div style={{ fontWeight: 600 }}>{s.name}</div>
-                  <div className="muted" style={{ fontSize: 13 }}>
-                    {new Date(s.createdAt).toLocaleString()}
-                  </div>
-                </div>
-                <div>
-                  <button className="btn" onClick={() => onDelete(s.id)} disabled={busyId === s.id}>{busyId === s.id ? 'Deleting…' : 'Delete'}</button>
-                </div>
-              </div>
-              {s.description && <p className="muted" style={{ marginTop: 8 }}>{s.description}</p>}
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
-                {(s.categories || []).map((c, idx) => <span key={idx} className="tag">{c}</span>)}
-              </div>
+              {/* Render a compact ModelCard for visual consistency; expose Manage inside the card */}
+              <ModelCard
+                model={{
+                  id: s.id,
+                  name: s.name,
+                  description: s.description,
+                  // Ensure preview image is absolute (prefix API_BASE when backend returns a relative path)
+                  previewImage: s.previewImage ? (s.previewImage.startsWith('http') ? s.previewImage : `${API_BASE}${s.previewImage}`) : null,
+                  categories: s.categories || [],
+                  ready: false,
+                  status: 'pending'
+                }}
+                managePath={`/profile/${encodeURIComponent(user?.discordId || user?.userId || user?.id)}/manage/${encodeURIComponent(s.numericId || s.id)}`}
+                showStatus={true}
+                createdAt={s.createdAt}
+              />
             </div>
           ))}
+          </div>
+        )
+      )}
+
+      {/* Published builds */}
+      {!dataLoading && myBuilds.length > 0 && (
+        <div style={{ marginTop: 24 }}>
+          <h3>My published builds</h3>
+          <div className="grid" style={{ gap: 12 }}>
+            {myBuilds.map(m => (
+              <div key={m.buildId || m.id} className="card" style={{ padding: 12 }}>
+                {/* Pass managePath so ModelCard can render the Manage button inside the card, and ask it to show status */}
+                <ModelCard model={m} managePath={`/profile/${encodeURIComponent(user?.discordId || user?.userId || user?.id)}/manage/${encodeURIComponent(m.id || m.numericId || m.buildId || m._id)}`} showStatus={true} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Show empty state only when both lists are empty and loading finished */}
+      {!dataLoading && myBuilds.length === 0 && subs.length === 0 && (
+        <div className="panel">
+          <p className="muted">You haven’t submitted any builds yet.</p>
         </div>
       )}
 
@@ -122,7 +180,7 @@ export default function Profile() {
         <h3>Your profile</h3>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
           <div style={{ fontWeight: 600 }}>Liked models</div>
-          <div className="muted">{likesCount}</div>
+          <div className="muted">{likesLoading ? '-' : likesCount}</div>
         </div>
 
         <div style={{ marginTop: 12 }}>

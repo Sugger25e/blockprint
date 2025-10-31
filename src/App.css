@@ -53,9 +53,12 @@ body {
 .nav-links a:hover { color: var(--text); background: var(--border); transform: translateY(-1px); }
 .nav-links .active { color: var(--text); background: var(--border); }
 .nav-right { display: flex; align-items: center; gap: 10px; }
-.avatar-link { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; }
-.avatar-link img { display: block; width: 32px; height: 32px; border-radius: 50%; }
-.avatar-fallback { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--border); color: var(--text); font-weight: 600; }
+.avatar-link { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; text-decoration: none; }
+.avatar-link img { display: block; width: 32px; height: 32px; border-radius: 50%; text-decoration: none; }
+.avatar-fallback { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--border); color: var(--text); font-weight: 600; text-decoration: none; }
+
+/* Ensure anchor underline doesn't appear for avatar links on hover/focus/active */
+.avatar-link, .avatar-link:link, .avatar-link:visited, .avatar-link:hover, .avatar-link:active, .avatar-link:focus { text-decoration: none; }
 
 .theme-switch { position: relative; width: 48px; height: 28px; border: none; background: transparent; padding: 0; cursor: pointer; }
 .switch-track { position: absolute; inset: 0; border-radius: 999px; background: var(--border); transition: background-color 240ms ease; }
@@ -141,6 +144,47 @@ body, .navbar, .model-card, .detail-viewer, .mobile-menu, .btn, .page, .detail, 
 .btn.primary:hover { filter: brightness(1.03); }
 .btn:focus-visible { outline: none; box-shadow: 0 0 0 3px color-mix(in sRGB, var(--accent) 24%, transparent); border-color: var(--accent); }
 .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+.unsaved-toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px; background: var(--card); border: 1px solid var(--border); padding: 12px 14px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; gap: 10px; box-shadow: 0 10px 30px rgba(0,0,0,0.12); z-index: 1200; animation: slideUp 300ms cubic-bezier(.2,.9,.2,1) both; }
+.unsaved-toast .btn { padding: 8px 12px; }
+.unsaved-toast .unsaved-text { font-weight: 600; }
+
+@keyframes slideUp {
+  from { transform: translateX(-50%) translateY(18px); opacity: 0; }
+  to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+@keyframes slideDown {
+  from { transform: translateX(-50%) translateY(0); opacity: 1; }
+  to { transform: translateX(-50%) translateY(18px); opacity: 0; }
+}
+
+/* When the toast is closing we want it to play the slideDown animation */
+.unsaved-toast.closing {
+  animation: slideDown 300ms cubic-bezier(.2,.9,.2,1) both;
+}
+
+/* Simple snackbar used for success/error messages */
+.snackbar {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  min-width: 160px;
+  max-width: 420px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  color: white;
+  z-index: 1300;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.18);
+  animation: snackIn 260ms cubic-bezier(.2,.9,.2,1) both;
+}
+.snackbar.info { background: rgba(30,30,30,0.9); }
+.snackbar.success { background: #16a34a; }
+.snackbar.error { background: #dc2626; }
+@keyframes snackIn { from { transform: translateY(8px); opacity: 0 } to { transform: translateY(0); opacity: 1 } }
+
+.btn.danger { background: #ef4444; color: white; border-color: #ef4444; }
+.btn.danger:hover { filter: brightness(0.95); }
 
 .detail { max-width: 1200px; margin: 0 auto; padding: 24px; }
 /* Prevent accidental horizontal overflow on the detail page */
@@ -357,6 +401,15 @@ body, .navbar, .model-card, .detail-viewer, .mobile-menu, .btn, .page, .detail, 
 @media (max-width: 900px) { .field-row.two { grid-template-columns: 1fr; } }
 .field { display: flex; flex-direction: column; gap: 6px; }
 .field.actions { align-self: end; }
+
+/* Shared preview split panel (used by ManageEdit and Upload to keep identical layout) */
+.preview-panel { display: flex; gap: 12px; width: 100%; max-width: 920px; height: 280px; min-height: 280px; max-height: 280px; box-sizing: border-box; overflow: hidden; }
+.preview-panel .viewer { flex: 1; min-width: 0; min-height: 0; height: 100%; border-radius: 8px; overflow: hidden; border: 1px solid var(--border); display: flex; }
+.preview-panel .viewer > * { width: 100%; height: 100%; }
+.preview-panel .preview-box { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; gap: 8px; }
+.preview-panel .preview-image { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.preview-panel .preview-image img { display: block; width: 100%; height: 100%; object-fit: cover; border-radius: 8px; border: 1px solid var(--border); }
+.preview-panel .preview-actions { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 label { font-weight: 600; color: var(--text); }
 .req { color: #ef4444; margin-left: 2px; }
 .input, .textarea, .input-file, select.input { border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 10px; padding: 10px 12px; outline: none; transition: border-color 160ms ease, box-shadow 180ms ease; }
@@ -444,8 +497,40 @@ label { font-weight: 600; color: var(--text); }
 .admin-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; max-width: 420px; margin: 40px auto; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
 .admin-form { display: flex; flex-direction: column; gap: 12px; }
 .submissions-grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
-.submission-card { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 12px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--card); }
-.submission-viewer { background: var(--viewer-bg); min-height: 260px; }
+.submission-card { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 12px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--card); align-items: start; }
+.submission-viewer { background: var(--viewer-bg); min-height: 260px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+
+/* Materials collapsible panel inside submission cards */
+.materials-panel { margin-top: 8px; }
+.materials-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; }
+.materials-header .muted { font-weight: 600; }
+.materials-body { margin-top: 6px; max-height: 180px; overflow: auto; padding-right: 8px; }
+.materials-body ul { margin: 0; padding-left: 18px; columns: 2; column-gap: 24px; }
+.materials-collapsed-preview { color: var(--muted); font-size: 13px; }
+
+/* Custom scrollbar for materials panel */
+.materials-body {
+  scrollbar-width: thin; /* Firefox */
+  scrollbar-color: rgba(120,120,120,0.6) rgba(0,0,0,0.04);
+}
+.materials-body::-webkit-scrollbar { width: 10px; height: 10px; }
+.materials-body::-webkit-scrollbar-track { background: transparent; }
+.materials-body::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(120,120,120,0.65), rgba(88,88,88,0.6));
+  border-radius: 8px;
+  border: 2px solid transparent; /* creates padding effect */
+  background-clip: padding-box;
+}
+.materials-body::-webkit-scrollbar-thumb:hover { filter: brightness(0.95); }
+
+/* Subtle shadow at top/bottom when scrolled for affordance */
+.materials-body:before, .materials-body:after { content: ""; position: sticky; left: 0; right: 0; height: 8px; pointer-events: none; z-index: 2; }
+.materials-body:before { top: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.06), transparent); display: block; }
+.materials-body:after { bottom: 0; background: linear-gradient(to top, rgba(0,0,0,0.04), transparent); display: block; }
+
+/* When materials panel is open, allow the grid to stretch so the viewer matches the right column height */
+.submission-card.materials-open { align-items: stretch; }
+.submission-card.materials-open .submission-viewer { min-height: 260px; }
 .submission-info { padding: 12px; display: flex; flex-direction: column; gap: 8px; }
 .submission-info .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
 @media (max-width: 900px) { .submission-card { grid-template-columns: 1fr; } }
@@ -455,8 +540,7 @@ label { font-weight: 600; color: var(--text); }
 .modal-head { font-size: 18px; margin-bottom: 6px; }
 @keyframes scaleIn { from { transform: translateY(4px) scale(0.98); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
 
-/* Captcha modal specific styling to make it more engaging and center the widget */
-.captcha-modal {
+  .captcha-modal {
   text-align: center;
   padding: 22px 20px;
   border-radius: 14px;

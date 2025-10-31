@@ -6,10 +6,10 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Use explicit API base if provided; otherwise:
-  // - In local dev, default to localhost:4000
-  // - In production, default to relative base ('') so requests go to /api on the same origin
-  const API_BASE = process.env.REACT_APP_API_BASE;
+  // Use explicit API base if provided. If not set, default to:
+  // - in production: '' (relative path so frontend talks to same origin via /api)
+  // - in development: 'http://localhost:4000' to hit the local backend
+  const API_BASE = process.env.REACT_APP_API_BASE || (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:4000');
 
   useEffect(() => {
     let cancelled = false;

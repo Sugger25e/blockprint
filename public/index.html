@@ -48,17 +48,31 @@
             else t = 'light';
           }
           if (t) {
+            // set attribute early so any CSS using [data-theme] picks it up
             document.documentElement.setAttribute('data-theme', t);
-            // Apply an immediate inline background/color to avoid flash before CSS loads
+
+            // Inject a tiny inline style that immediately applies background/color to both html and body
+            // This prevents the white -> dark flash on reload by covering the initial paint.
+            var css = '\n/* initial-theme injection - remove to avoid flash */\n:root[data-theme="dark"] html, :root[data-theme="dark"] body { background: #0f1115 !important; color: #e6e6e6 !important; }\n:root[data-theme="light"] html, :root[data-theme="light"] body { background: #f4f6fb !important; color: #0f1115 !important; }\nhtml, body { height: 100%; }\n';
             try {
-              if (t === 'dark') {
-                document.documentElement.style.background = '#0f1115';
-                document.documentElement.style.color = '#e6e6e6';
-              } else {
-                document.documentElement.style.background = '#f4f6fb';
-                document.documentElement.style.color = '#0f1115';
-              }
-            } catch (e) { /* ignore */ }
+              var s = document.createElement('style');
+              s.id = 'initial-theme-style';
+              s.appendChild(document.createTextNode(css));
+              document.head.appendChild(s);
+            } catch (e) {
+              // fallback: apply inline styles directly
+              try {
+                if (t === 'dark') {
+                  document.documentElement.style.background = '#0f1115';
+                  document.documentElement.style.color = '#e6e6e6';
+                  if (document.body) { document.body.style.background = '#0f1115'; document.body.style.color = '#e6e6e6'; }
+                } else {
+                  document.documentElement.style.background = '#f4f6fb';
+                  document.documentElement.style.color = '#0f1115';
+                  if (document.body) { document.body.style.background = '#f4f6fb'; document.body.style.color = '#0f1115'; }
+                }
+              } catch (_) {}
+            }
           }
         } catch (e) { /* ignore */ }
       })();

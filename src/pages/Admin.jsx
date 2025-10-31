@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import useReloadableNavigate from '../utils/useReloadableNavigate';
 import ModelViewer from '../components/ModelViewer';
 import ModelCard from '../components/ModelCard';
 import { useAuth } from '../context/AuthContext';
@@ -9,6 +10,7 @@ const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
 
 export default function Admin() {
   const { user, loading } = useAuth();
+  const navigate = useReloadableNavigate();
 
   const [subs, setSubs] = useState([]);
   const [adminLoading, setAdminLoading] = useState(false);
@@ -297,6 +299,60 @@ export default function Admin() {
     setBuilds(prev => prev.filter(b => b.buildId !== buildId));
   };
 
+  // Component to render a single pending submission with collapsible materials
+  function SubmissionCard({ s }) {
+    const [materialsOpen, setMaterialsOpen] = useState(false);
+    return (
+      <div className={`submission-card ${materialsOpen ? 'materials-open' : ''}`} key={s.id}>
+        <div className="submission-viewer">
+          <ModelViewer url={s.glbUrl} fitMargin={4.0} background={'var(--viewer-bg)'} style={{ width: '100%', height: materialsOpen ? '100%' : 260 }} />
+        </div>
+        <div className="submission-info">
+          <div className="title">{s.name}</div>
+          <div className="muted">by {s.credits?.author || 'Unknown'}</div>
+          <div className="desc">{s.description}</div>
+          <div className="tags">{(s.categories||[]).map((c,i)=>(<span key={i} className="tag">{c}</span>))}</div>
+
+          {Array.isArray(s.materials) && s.materials.length > 0 && (
+            <div className="materials-panel">
+              <div className="materials-header" onClick={() => setMaterialsOpen(o => !o)}>
+                <div className="muted">Materials needed</div>
+                <div className="muted">{materialsOpen ? '▾' : `▸ ${s.materials.length}`}</div>
+              </div>
+              {materialsOpen && (
+                <div className="materials-body">
+                  <ul style={{ margin: 0 }}>
+                    {s.materials.slice(0, 200).map((m, i) => {
+                      const id = (m.icon || '').replace(/^minecraft:/, '');
+                      const iconUrl = id ? `https://mc.nerothe.com/img/1.21.8/minecraft_${id}.png` : '';
+                      return (
+                        <li key={i} style={{ breakInside: 'avoid', display:'flex', alignItems:'center', gap:8 }}>
+                          {iconUrl && (
+                            <img src={iconUrl} alt={m.itemname} width={18} height={18} loading="lazy"
+                                 style={{ display: 'inline-block', background: 'rgba(0,0,0,0.06)', borderRadius: 3 }}
+                                 onError={(e)=>{ e.currentTarget.style.display = 'none'; }} />
+                          )}
+                          <span style={{ flex: 1 }}>{m.itemname}</span>
+                          <span style={{ opacity: 0.8 }}>× {m.amount}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="actions">
+            <a className="btn" href={s.mcstructureUrl} download>Download .mcstructure</a>
+            <button className="btn primary" onClick={()=>approve(s.id)}>Approve</button>
+            <button className="btn" onClick={()=>remove(s.id)}>Delete</button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const [upName, setUpName] = useState('');
   const [upDesc, setUpDesc] = useState('');
   // Categories (chips) like public Upload
@@ -370,7 +426,20 @@ export default function Admin() {
           await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(buildId)}/ready`, { method: 'POST', credentials: 'include' });
         } catch (_) {}
       }
+      // If the admin captured/selected a preview image before submit, upload it now to the build preview endpoint
+      if (buildId && upPreviewFile) {
+        try {
+          const fd2 = new FormData(); fd2.append('preview', upPreviewFile, `${buildId}-preview.png`);
+          await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(buildId)}/preview`, { method: 'POST', credentials: 'include', body: fd2 });
+        } catch (e) {
+          console.warn('Preview upload after create failed', e);
+        }
+      }
   setUpName(''); setUpDesc(''); setAdCategories([]); setUpGlb(null); setUpMc(null); setUpHoloprint(null); setUpMaterials([]); setUpMatError('');
+      if (upPreviewUrl) {
+        try { URL.revokeObjectURL(upPreviewUrl); } catch (e) {}
+      }
+      setUpPreviewFile(null); setUpPreviewUrl(null);
       setUpSubmitted(false); setUpErrors({});
       alert('Build uploaded');
     } catch (err) {
@@ -382,6 +451,9 @@ export default function Admin() {
 
   // Preview URL for selected admin .glb file
   const [adGlbPreviewUrl, setAdGlbPreviewUrl] = useState(null);
+  const adViewerRef = useRef(null);
+  const [upPreviewFile, setUpPreviewFile] = useState(null);
+  const [upPreviewUrl, setUpPreviewUrl] = useState(null);
   useEffect(() => {
     if (!upGlb) {
       setAdGlbPreviewUrl(null);
@@ -612,44 +684,7 @@ export default function Admin() {
           {!adminLoading && subs.length > 0 && (
             <div className="submissions-grid">
               {subs.map(s => (
-                <div className="submission-card" key={s.id}>
-                  <div className="submission-viewer">
-                    <ModelViewer url={s.glbUrl} fitMargin={4.0} background={'var(--viewer-bg)'} />
-                  </div>
-                  <div className="submission-info">
-                    <div className="title">{s.name}</div>
-                    <div className="muted">by {s.credits?.author || 'Unknown'}</div>
-                    <div className="desc">{s.description}</div>
-                    <div className="tags">{(s.categories||[]).map((c,i)=>(<span key={i} className="tag">{c}</span>))}</div>
-                    {Array.isArray(s.materials) && s.materials.length > 0 && (
-                      <div className="materials" style={{ marginTop: 8 }}>
-                        <div className="muted" style={{ marginBottom: 4 }}>Materials needed</div>
-                        <ul style={{ margin: 0, paddingLeft: 18, columns: 2, columnGap: 24 }}>
-                          {s.materials.slice(0, 24).map((m, i) => {
-                            const id = (m.icon || '').replace(/^minecraft:/, '');
-                            const iconUrl = id ? `https://mc.nerothe.com/img/1.21.8/minecraft_${id}.png` : '';
-                            return (
-                              <li key={i} style={{ breakInside: 'avoid', display:'flex', alignItems:'center', gap:8 }}>
-                                {iconUrl && (
-                                  <img src={iconUrl} alt={m.itemname} width={18} height={18} loading="lazy"
-                                       style={{ display: 'inline-block', background: 'rgba(0,0,0,0.06)', borderRadius: 3 }}
-                                       onError={(e)=>{ e.currentTarget.style.display = 'none'; }} />
-                                )}
-                                <span style={{ flex: 1 }}>{m.itemname}</span>
-                                <span style={{ opacity: 0.8 }}>× {m.amount}</span>
-                              </li>
-                            );
-                          })}
-                        </ul>
-                      </div>
-                    )}
-                    <div className="actions">
-                      <a className="btn" href={s.mcstructureUrl} download>Download .mcstructure</a>
-                      <button className="btn primary" onClick={()=>approve(s.id)}>Approve</button>
-                      <button className="btn" onClick={()=>remove(s.id)}>Delete</button>
-                    </div>
-                  </div>
-                </div>
+                <SubmissionCard s={s} key={s.id} />
               ))}
             </div>
           )}
@@ -662,27 +697,18 @@ export default function Admin() {
             <div className="field">
               <label>Build name <span className="req">*</span></label>
               <input className={`input ${upSubmitted && upErrors.name ? 'input-error' : ''}`} type="text" value={upName} onChange={(e)=>setUpName(e.target.value)} placeholder="Ex: Medieval Watchtower" />
-                  <input className={`input-file ${upSubmitted && upErrors.glb ? 'input-error' : ''}`} type="file" accept=".glb,.GLB" onChange={(e)=>setUpGlb(e.target.files?.[0]||null)} />
-                  {upSubmitted && upErrors.glb && <div className="error-text">{upErrors.glb}</div>}
-                  {upGlb && <div className="file-meta">{upGlb.name} • {(upGlb.size/1024/1024).toFixed(2)} MB</div>}
-                  {/* Inline preview of the selected .glb file for admins */}
-                  {adGlbPreviewUrl && (
-                    <div style={{ marginTop: 12, width: '100%', height: 220, borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)' }}>
-                      <ModelViewer url={adGlbPreviewUrl} fitMargin={1.0} background={'var(--viewer-bg)'} />
-                    </div>
-                  )}
-                </div>
-              </div>
+              {upSubmitted && upErrors.name && <div className="error-text">{upErrors.name}</div>}
+            </div>
+          </div>
 
-              <div className="field-row">
-                <div className="field">
-                  <label>.mcstructure file <span className="req">*</span></label>
-                  <input className={`input-file ${upSubmitted && upErrors.mc ? 'input-error' : ''}`} type="file" accept=".mcstructure" onChange={(e)=>setUpMc(e.target.files?.[0]||null)} />
-                  {upSubmitted && upErrors.mc && <div className="error-text">{upErrors.mc}</div>}
-                  {upMc && <div className="file-meta">{upMc.name} • {(upMc.size/1024/1024).toFixed(2)} MB</div>}
-                  <div className="help">Required for in-game structure placement.</div>
-                </div>
-              </div>
+          <div className="field-row">
+            <div className="field">
+              <label>Description</label>
+              <textarea className="textarea" rows={3} value={upDesc} onChange={(e)=>setUpDesc(e.target.value)} placeholder="Short description of the build" />
+            </div>
+          </div>
+
+              
           <div className="field-row">
             <div className="field">
               <label>Categories <span className="req">*</span></label>
@@ -712,7 +738,7 @@ export default function Admin() {
             </div>
           </div>
 
-          <div className="field-row two">
+          <div className="field-row">
             <div className="field">
               <label>.glb file (3D preview) <span className="req">*</span></label>
               <input className={`input-file ${upSubmitted && upErrors.glb ? 'input-error' : ''}`} type="file" accept=".glb,.GLB" onChange={(e)=>setUpGlb(e.target.files?.[0]||null)} />
@@ -721,10 +747,35 @@ export default function Admin() {
               {/* Inline preview of the selected .glb file for admins */}
               {adGlbPreviewUrl && (
                 <div className="glb-preview" style={{ marginTop: 12 }}>
-                  <ModelViewer url={adGlbPreviewUrl} fitMargin={1.0} background={'var(--viewer-bg)'} />
+                  <ModelViewer url={adGlbPreviewUrl} fitMargin={1.0} background={'var(--viewer-bg)'} ref={(el)=>{ if (el) adViewerRef.current = el; }} />
+                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                    <button className="btn" type="button" onClick={async ()=>{
+                      if (!adViewerRef.current || !adViewerRef.current.capture) return;
+                      try {
+                        const blob = await adViewerRef.current.capture({ quality: 1.0, scale: 2 });
+                        setUpPreviewFile(blob);
+                        const url = URL.createObjectURL(blob);
+                        setUpPreviewUrl(url);
+                      } catch (e) { console.error('Capture failed', e); alert('Capture failed'); }
+                    }}>Capture preview</button>
+                    <label className="btn" style={{ position: 'relative', overflow: 'hidden' }}>
+                      <input type="file" accept="image/*" style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer' }} onChange={(e)=>{
+                        const f = e.target.files?.[0]; if (!f) return; setUpPreviewFile(f); const url = URL.createObjectURL(f); setUpPreviewUrl(url);
+                      }} />
+                      Upload preview image
+                    </label>
+                  </div>
+                  {upPreviewUrl && (
+                    <div style={{ marginTop: 8 }}>
+                      <img src={upPreviewUrl} alt="selected preview" style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 6 }} />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
+          </div>
+
+          <div className="field-row">
             <div className="field">
               <label>.mcstructure file <span className="req">*</span></label>
               <input className={`input-file ${upSubmitted && upErrors.mc ? 'input-error' : ''}`} type="file" accept=".mcstructure" onChange={(e)=>setUpMc(e.target.files?.[0]||null)} />
@@ -822,12 +873,12 @@ export default function Admin() {
           {!buildsLoading && builds.length === 0 && <p className="muted">No builds yet.</p>}
           {!buildsLoading && builds.length > 0 && (
             <div className="grid fade-in">
-              {builds.map((m) => (
-                <div key={m.buildId || m.id}>
-                  {/* Reuse ModelCard with a custom action */}
-                  <ModelCard model={m} actionLabel="Remove" onAction={removeBuild} />
-                </div>
-              ))}
+                  {builds.map((m) => (
+                    <div key={m.buildId || m.id}>
+                      {/* Reuse ModelCard with a custom action that goes to the edit/manage page */}
+                      <ModelCard model={m} actionLabel="Manage" onAction={(mdl) => navigate(`/admin/manage/${encodeURIComponent(mdl.id || mdl.buildId)}`)} />
+                    </div>
+                  ))}
             </div>
           )}
         </div>
