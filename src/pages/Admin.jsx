@@ -280,7 +280,6 @@ export default function Admin() {
   // Admin login removed; access controlled via Discord ID whitelist on session
 
   const approve = async (id) => {
-    if (!window.confirm('Approve this submission? This will go to Drafts tab for verification.')) return;
   await fetch(`${API_BASE}/api/admin/submissions/${id}/approve`, { method: 'POST', credentials: 'include' });
     setSubs(subs.filter(s => s.id !== id));
   };
@@ -293,15 +292,26 @@ export default function Admin() {
   const removeBuild = async (build) => {
     const label = build?.name || 'this build';
     if (!window.confirm(`Remove ${label}?`)) return;
-    const buildId = build.buildId; // Mongo _id provided by API
+    const buildId = build.buildId || build.id || build._id;
     if (!buildId) return;
-  await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(buildId)}`, { method: 'DELETE', credentials: 'include' });
-    setBuilds(prev => prev.filter(b => b.buildId !== buildId));
+    await fetch(`${API_BASE}/api/admin/builds/${encodeURIComponent(buildId)}`, { method: 'DELETE', credentials: 'include' });
+    // Remove from both published builds and drafts lists if present
+    try { setBuilds(prev => prev.filter(b => (b.buildId || b.id || b._id) !== buildId)); } catch (_) {}
+    try {
+      setDrafts(prev => {
+        const next = prev.filter(d => (d.buildId || d.id || d._id) !== buildId);
+        // Ensure draftPage is within bounds after removal
+        setDraftPage(p => Math.min(p, Math.max(0, next.length - 1)));
+        return next;
+      });
+    } catch (_) {}
   };
 
   // Component to render a single pending submission with collapsible materials
   function SubmissionCard({ s }) {
     const [materialsOpen, setMaterialsOpen] = useState(false);
+    const [approving, setApproving] = useState(false);
+    const [rejecting, setRejecting] = useState(false);
     return (
       <div className={`submission-card ${materialsOpen ? 'materials-open' : ''}`} key={s.id}>
         <div className="submission-viewer">
@@ -345,8 +355,41 @@ export default function Admin() {
 
           <div className="actions">
             <a className="btn" href={s.mcstructureUrl} download>Download .mcstructure</a>
-            <button className="btn primary" onClick={()=>approve(s.id)}>Approve</button>
-            <button className="btn" onClick={()=>remove(s.id)}>Delete</button>
+            <button
+              className="btn success"
+              onClick={async () => {
+                if (approving || rejecting) return;
+                if (!window.confirm('Approve this submission? This will go to Drafts tab for verification.')) return;
+                try {
+                  setApproving(true);
+                  await approve(s.id);
+                } catch (e) {
+                  console.error('Approve failed', e);
+                  alert('Approve failed');
+                } finally {
+                  setApproving(false);
+                }
+              }}
+              disabled={approving || rejecting}
+            >{approving ? 'Approving…' : 'Approve'}</button>
+
+            <button
+              className="btn danger"
+              onClick={async () => {
+                if (approving || rejecting) return;
+                if (!window.confirm('Reject this submission? This cannot be undone.')) return;
+                try {
+                  setRejecting(true);
+                  await remove(s.id);
+                } catch (e) {
+                  console.error('Reject failed', e);
+                  alert('Reject failed');
+                } finally {
+                  setRejecting(false);
+                }
+              }}
+              disabled={approving || rejecting}
+            >{rejecting ? 'Rejecting…' : 'Reject'}</button>
           </div>
         </div>
       </div>
@@ -876,7 +919,7 @@ export default function Admin() {
                   {builds.map((m) => (
                     <div key={m.buildId || m.id}>
                       {/* Reuse ModelCard with a custom action that goes to the edit/manage page */}
-                      <ModelCard model={m} actionLabel="Manage" onAction={(mdl) => navigate(`/admin/manage/${encodeURIComponent(mdl.id || mdl.buildId)}`)} />
+                      <ModelCard model={m} actionLabel="Manage" onAction={(mdl) => navigate(`/profile/${encodeURIComponent(user?.discordId || '')}/manage/${encodeURIComponent(mdl.numericId || mdl.id || mdl.buildId)}`)} />
                     </div>
                   ))}
             </div>
@@ -905,7 +948,11 @@ export default function Admin() {
             <div className="drafts-list" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               {/* Show one draft per page to avoid flooding the admin UI */}
               <div>
-                <DraftCard b={drafts[draftPage]} idx={draftPage} key={drafts[draftPage].buildId || draftPage} />
+                {drafts[draftPage] ? (
+                  <DraftCard b={drafts[draftPage]} idx={draftPage} key={drafts[draftPage].buildId || draftPage} />
+                ) : (
+                  <div className="muted">No draft selected</div>
+                )}
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'center', gap: 12, alignItems: 'center' }}>

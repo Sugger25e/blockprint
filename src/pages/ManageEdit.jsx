@@ -13,6 +13,7 @@ export default function ManageEdit({ ownerMode = false }) {
   const navigate = useReloadableNavigate();
   const { user, loading: authLoading } = useAuth();
   const [model, setModel] = useState(null);
+  const [isSubmission, setIsSubmission] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -34,6 +35,7 @@ export default function ManageEdit({ ownerMode = false }) {
   const [previewUrlLocal, setPreviewUrlLocal] = useState(null);
   const [previewTempUrl, setPreviewTempUrl] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastClosing, setToastClosing] = useState(false);
   const [snack, setSnack] = useState({ visible: false, message: '', type: 'info' });
@@ -45,31 +47,82 @@ export default function ManageEdit({ ownerMode = false }) {
       setLoading(true);
       try {
         if (ownerMode) {
-          // Owner mode: fetch single build owned by the user
-          const res = await fetch(`${API_BASE}/api/my/builds/${encodeURIComponent(id)}`, { credentials: 'include', cache: 'no-store' });
-          if (!res.ok) throw new Error('Failed to load build');
-          const data = await res.json();
-          const found = data?.build || null;
-          if (!found) throw new Error('Build not found');
-          const normalized = {
-            ...found,
-            url: found.url?.startsWith('http') ? found.url : `${API_BASE}${found.url || ''}`,
-            previewImage: found.previewImageUrl?.startsWith('http') ? found.previewImageUrl : (found.previewImage || (found.previewImageUrl ? `${API_BASE}${found.previewImageUrl}` : null)),
-            credits: found.credits || {},
-          };
-          if (!cancelled) {
-            setModel(normalized);
-            setName(normalized.name || '');
-            setDescription(normalized.description || '');
-            setCategories(normalized.categories || []);
-            initialRef.current = {
-              name: normalized.name || '',
-              description: normalized.description || '',
-              categories: (normalized.categories || []).slice(),
-              glbFile: null, mcFile: null, holoprintFile: null,
-              previewImage: normalized.previewImage || null
+          // Owner mode: try to fetch a published build first, but fall back to a submission if not found
+          let fetched = null;
+          try {
+            const res = await fetch(`${API_BASE}/api/my/builds/${encodeURIComponent(id)}`, { credentials: 'include', cache: 'no-store' });
+            if (res.ok) {
+              const data = await res.json();
+              const found = data?.build || null;
+              if (found) fetched = { type: 'build', data: found };
+            }
+          } catch (_) { /* ignore and try submission */ }
+
+          if (!fetched) {
+            // try submission path (pending submission owned by user)
+            try {
+              const res2 = await fetch(`${API_BASE}/api/my/submissions/${encodeURIComponent(id)}`, { credentials: 'include', cache: 'no-store' });
+              if (res2.ok) {
+                const data2 = await res2.json();
+                const found2 = data2?.submission || null;
+                if (found2) fetched = { type: 'submission', data: found2 };
+              }
+            } catch (_) { /* ignore */ }
+          }
+
+          if (!fetched) throw new Error('Build not found');
+
+          if (fetched.type === 'build') {
+            const found = fetched.data;
+            const normalized = {
+              ...found,
+              url: found.url?.startsWith('http') ? found.url : `${API_BASE}${found.url || ''}`,
+              previewImage: found.previewImageUrl?.startsWith('http') ? found.previewImageUrl : (found.previewImage || (found.previewImageUrl ? `${API_BASE}${found.previewImageUrl}` : null)),
+              credits: found.credits || {},
             };
-            setDirty(false);
+            if (!cancelled) {
+              setIsSubmission(false);
+              setModel(normalized);
+              setName(normalized.name || '');
+              setDescription(normalized.description || '');
+              setCategories(normalized.categories || []);
+              initialRef.current = {
+                name: normalized.name || '',
+                description: normalized.description || '',
+                categories: (normalized.categories || []).slice(),
+                glbFile: null, mcFile: null, holoprintFile: null,
+                previewImage: normalized.previewImage || null
+              };
+              setDirty(false);
+            }
+          } else {
+            const found = fetched.data;
+            const normalized = {
+              // submission shape: id, numericId, name, description, categories, credits, glbUrl, mcstructureUrl, previewImage
+              id: found.id,
+              numericId: found.numericId || null,
+              name: found.name,
+              description: found.description,
+              categories: found.categories || [],
+              credits: found.credits || {},
+              url: found.glbUrl?.startsWith('http') ? found.glbUrl : (found.glbUrl ? `${API_BASE}${found.glbUrl}` : null),
+              previewImage: found.previewImage?.startsWith('http') ? found.previewImage : (found.previewImage ? `${API_BASE}${found.previewImage}` : null),
+            };
+            if (!cancelled) {
+              setIsSubmission(true);
+              setModel(normalized);
+              setName(normalized.name || '');
+              setDescription(normalized.description || '');
+              setCategories(normalized.categories || []);
+              initialRef.current = {
+                name: normalized.name || '',
+                description: normalized.description || '',
+                categories: (normalized.categories || []).slice(),
+                glbFile: null, mcFile: null, holoprintFile: null,
+                previewImage: normalized.previewImage || null
+              };
+              setDirty(false);
+            }
           }
         } else {
           // Admin mode: fetch builds list and find build by id
@@ -186,7 +239,9 @@ export default function ManageEdit({ ownerMode = false }) {
       try {
         const fd = new FormData();
         fd.append('preview', blob, `${id}-preview.png`);
-        const previewTempEndpoint = ownerMode ? `${API_BASE}/api/my/builds/${encodeURIComponent(id)}/preview-temp` : `${API_BASE}/api/admin/builds/${encodeURIComponent(id)}/preview-temp`;
+        const previewTempEndpoint = ownerMode
+          ? (isSubmission ? `${API_BASE}/api/my/submissions/${encodeURIComponent(id)}/preview-temp` : `${API_BASE}/api/my/builds/${encodeURIComponent(id)}/preview-temp`)
+          : `${API_BASE}/api/admin/builds/${encodeURIComponent(id)}/preview-temp`;
         const res = await fetch(previewTempEndpoint, { method: 'POST', credentials: 'include', body: fd });
         if (!res.ok) throw new Error('Temp preview upload failed');
         const json = await res.json();
@@ -217,7 +272,9 @@ export default function ManageEdit({ ownerMode = false }) {
       if (previewTempUrl) {
         setPreviewUploading(true);
         try {
-          const previewCommitEndpoint = ownerMode ? `${API_BASE}/api/my/builds/${encodeURIComponent(model.buildId || model.id)}/preview` : `${API_BASE}/api/admin/builds/${encodeURIComponent(model.buildId || model.id)}/preview`;
+          const previewCommitEndpoint = ownerMode
+            ? (isSubmission ? `${API_BASE}/api/my/submissions/${encodeURIComponent(model.id)}/preview` : `${API_BASE}/api/my/builds/${encodeURIComponent(model.buildId || model.id)}/preview`)
+            : `${API_BASE}/api/admin/builds/${encodeURIComponent(model.buildId || model.id)}/preview`;
           const resPrev = await fetch(previewCommitEndpoint, {
             method: 'POST',
             credentials: 'include',
@@ -239,13 +296,15 @@ export default function ManageEdit({ ownerMode = false }) {
           setSaving(false);
           return;
         } finally { setPreviewUploading(false); }
-      } else if (previewBlob) {
+          } else if (previewBlob) {
         // fallback: no temp upload; upload the blob directly
         setPreviewUploading(true);
         try {
           const fdPrev = new FormData();
           fdPrev.append('preview', previewBlob, `${model.buildId || model.id}-preview.png`);
-          const previewUploadEndpoint = ownerMode ? `${API_BASE}/api/my/builds/${encodeURIComponent(model.buildId || model.id)}/preview` : `${API_BASE}/api/admin/builds/${encodeURIComponent(model.buildId || model.id)}/preview`;
+          const previewUploadEndpoint = ownerMode
+            ? (isSubmission ? `${API_BASE}/api/my/submissions/${encodeURIComponent(model.id)}/preview` : `${API_BASE}/api/my/builds/${encodeURIComponent(model.buildId || model.id)}/preview`)
+            : `${API_BASE}/api/admin/builds/${encodeURIComponent(model.buildId || model.id)}/preview`;
           const resPrev = await fetch(previewUploadEndpoint, { method: 'POST', credentials: 'include', body: fdPrev });
           if (!resPrev.ok) {
             const txt = await resPrev.text().catch(()=>null);
@@ -275,7 +334,9 @@ export default function ManageEdit({ ownerMode = false }) {
       if (mcFile) fd.append('mcstructure', mcFile);
       if (holoprintFile) fd.append('holoprint', holoprintFile);
 
-  const patchEndpoint = ownerMode ? `${API_BASE}/api/my/builds/${encodeURIComponent(model.buildId || model.id)}` : `${API_BASE}/api/admin/builds/${encodeURIComponent(model.buildId || model.id)}`;
+  const patchEndpoint = ownerMode
+    ? (isSubmission ? `${API_BASE}/api/my/submissions/${encodeURIComponent(model.id)}` : `${API_BASE}/api/my/builds/${encodeURIComponent(model.buildId || model.id)}`)
+    : `${API_BASE}/api/admin/builds/${encodeURIComponent(model.buildId || model.id)}`;
   const res = await fetch(patchEndpoint, { method: 'PATCH', credentials: 'include', body: fd });
       if (!res.ok) {
         const txt = await res.text().catch(()=>null);
@@ -295,7 +356,29 @@ export default function ManageEdit({ ownerMode = false }) {
           glbFile: null, mcFile: null, holoprintFile: null,
           previewImage: normalizedPreview
         };
-        // clear staged files/preview state and mark clean
+      } else if (data?.submission) {
+        // PATCH to a submission returns the updated submission; normalize similarly
+        const updated = data.submission;
+        const normalized = {
+          id: updated.id || updated._id || model.id,
+          numericId: updated.numericId || model.numericId || null,
+          name: updated.name || name,
+          description: updated.description || description,
+          categories: updated.categories || categories || [],
+          credits: updated.credits || model.credits || {},
+          url: updated.glbUrl?.startsWith('http') ? updated.glbUrl : (updated.glbUrl ? `${API_BASE}${updated.glbUrl}` : model.url),
+          previewImage: updated.previewImagePath?.startsWith('http') ? updated.previewImagePath : (updated.previewImagePath ? `${API_BASE}${updated.previewImagePath}` : (model && model.previewImage) ? model.previewImage : null)
+        };
+        setModel(prev => ({ ...prev, ...normalized }));
+        initialRef.current = {
+          name: normalized.name || name,
+          description: normalized.description || description,
+          categories: (normalized.categories || categories || []).slice(),
+          glbFile: null, mcFile: null, holoprintFile: null,
+          previewImage: normalized.previewImage
+        };
+      }
+  // clear staged files/preview state and mark clean
         setGlbFile(null); setMcFile(null); setHoloprintFile(null);
         setPreviewBlob(null); try { URL.revokeObjectURL(previewUrlLocal); } catch {} setPreviewUrlLocal(null); setPreviewTempUrl(null);
         setDirty(false);
@@ -303,9 +386,6 @@ export default function ManageEdit({ ownerMode = false }) {
         setToastClosing(true);
         setTimeout(() => { setToastClosing(false); setToastVisible(false); }, 320);
         showSnack('Saved', 'success');
-      } else {
-        showSnack('Saved', 'success');
-      }
     } catch (err) {
       console.error(err);
       showSnack(err?.message || 'Save failed', 'error');
@@ -315,14 +395,23 @@ export default function ManageEdit({ ownerMode = false }) {
   const handleDelete = async () => {
     if (!window.confirm('Delete this build from Discover? This action cannot be undone.')) return;
     try {
-  const deleteEndpoint = ownerMode ? `${API_BASE}/api/my/builds/${encodeURIComponent(model.buildId || model.id)}` : `${API_BASE}/api/admin/builds/${encodeURIComponent(model.buildId || model.id)}`;
-  const res = await fetch(deleteEndpoint, { method: 'DELETE', credentials: 'include' });
+      setDeleting(true);
+      const deleteEndpoint = ownerMode
+        ? (isSubmission ? `${API_BASE}/api/my/submissions/${encodeURIComponent(model.id)}` : `${API_BASE}/api/my/builds/${encodeURIComponent(model.buildId || model.id)}`)
+        : `${API_BASE}/api/admin/builds/${encodeURIComponent(model.buildId || model.id)}`;
+      const res = await fetch(deleteEndpoint, { method: 'DELETE', credentials: 'include' });
       if (!res.ok) throw new Error('Delete failed');
-      showSnack('Build deleted', 'success');
-  if (ownerMode) navigate(`/profile`); else navigate('/admin?tab=manage');
+      // Redirect to profile/admin and show toast on the target page via location.state
+      if (ownerMode) {
+        navigate('/profile', { state: { toast: { message: 'Build deleted', type: 'success' } } });
+      } else {
+        navigate('/admin?tab=manage', { state: { toast: { message: 'Build deleted', type: 'success' } } });
+      }
     } catch (e) {
       console.error(e);
       showSnack(e?.message || 'Delete failed', 'error');
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -461,7 +550,7 @@ export default function ManageEdit({ ownerMode = false }) {
         {/* Delete button placed at the very bottom after holoprint */}
         <div className="field-row">
           <div className="field actions">
-            <button type="button" className="btn danger" onClick={handleDelete}>Delete</button>
+            <button type="button" className="btn danger" onClick={handleDelete} disabled={deleting} aria-busy={deleting}>{deleting ? 'Deleting…' : 'Delete'}</button>
           </div>
         </div>
 
@@ -488,17 +577,30 @@ export default function ManageEdit({ ownerMode = false }) {
                     if (init.previewImage) {
                       setModel(m => m ? ({ ...m, previewImage: init.previewImage }) : m);
                     } else {
-                      // fallback: re-fetch the build to get the server preview URL
+                      // fallback: re-fetch the build or submission to get the server preview URL
                       try {
                         if (ownerMode) {
-                          const res = await fetch(`${API_BASE}/api/my/builds/${encodeURIComponent(id)}`, { credentials: 'include', cache: 'no-store' });
-                          if (res.ok) {
-                            const data = await res.json();
-                            const found = data?.build || null;
-                            if (found) {
-                              const preview = found.previewImageUrl?.startsWith('http') ? found.previewImageUrl : (found.previewImageUrl ? `${API_BASE}${found.previewImageUrl}` : null);
-                              setModel(m => m ? ({ ...m, previewImage: preview }) : m);
-                              initialRef.current = { ...(initialRef.current || {}), previewImage: preview || null };
+                          if (isSubmission) {
+                            const res = await fetch(`${API_BASE}/api/my/submissions/${encodeURIComponent(id)}`, { credentials: 'include', cache: 'no-store' });
+                            if (res.ok) {
+                              const data = await res.json();
+                              const found = data?.submission || null;
+                              if (found) {
+                                const preview = found.previewImage?.startsWith('http') ? found.previewImage : (found.previewImage ? `${API_BASE}${found.previewImage}` : null);
+                                setModel(m => m ? ({ ...m, previewImage: preview }) : m);
+                                initialRef.current = { ...(initialRef.current || {}), previewImage: preview || null };
+                              }
+                            }
+                          } else {
+                            const res = await fetch(`${API_BASE}/api/my/builds/${encodeURIComponent(id)}`, { credentials: 'include', cache: 'no-store' });
+                            if (res.ok) {
+                              const data = await res.json();
+                              const found = data?.build || null;
+                              if (found) {
+                                const preview = found.previewImageUrl?.startsWith('http') ? found.previewImageUrl : (found.previewImage || (found.previewImageUrl ? `${API_BASE}${found.previewImageUrl}` : null));
+                                setModel(m => m ? ({ ...m, previewImage: preview }) : m);
+                                initialRef.current = { ...(initialRef.current || {}), previewImage: preview || null };
+                              }
                             }
                           }
                         } else {
@@ -519,7 +621,9 @@ export default function ManageEdit({ ownerMode = false }) {
                     // if a temp preview was uploaded to the server, delete it now
                     if (previewTempUrl) {
                       try {
-                        const previewTempDelete = ownerMode ? `${API_BASE}/api/my/builds/${encodeURIComponent(id)}/preview-temp` : `${API_BASE}/api/admin/builds/${encodeURIComponent(id)}/preview-temp`;
+                        const previewTempDelete = ownerMode
+                          ? (isSubmission ? `${API_BASE}/api/my/submissions/${encodeURIComponent(id)}/preview-temp` : `${API_BASE}/api/my/builds/${encodeURIComponent(id)}/preview-temp`)
+                          : `${API_BASE}/api/admin/builds/${encodeURIComponent(id)}/preview-temp`;
                         await fetch(previewTempDelete, {
                           method: 'DELETE',
                           credentials: 'include',

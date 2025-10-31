@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { useToast } from '../context/UiContext';
 import ModelViewer from '../components/ModelViewer';
 
@@ -80,6 +81,7 @@ export default function Upload() {
   const pendingFormRef = useRef(null);
   const [showCaptchaDialog, setShowCaptchaDialog] = useState(false);
   const HCAPTCHA_SITEKEY = process.env.REACT_APP_HCAPTCHA_SITEKEY;
+  const navigate = useNavigate();
 
   const toggleCategory = (val) => {
     if (categories.includes(val)) {
@@ -99,6 +101,8 @@ export default function Upload() {
     // Author is optional (can be provided here) — otherwise credits come from your session
     if (!glbFile) e.glb = 'A .glb file is required for the 3D preview';
     if (!mcstructureFile) e.mcstructure = 'A .mcstructure file is required';
+    // Require the user to generate a preview image before submitting
+    if (!previewFile) e.preview = 'Generate a preview image before submitting';
     if (!Array.isArray(cats) || cats.length === 0) e.categories = 'Add at least one category';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -540,10 +544,13 @@ export default function Upload() {
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <div style={{ display: 'flex', gap: 8 }}>
-                      <button type="button" className="btn" onClick={handleGeneratePreview} disabled={previewGenerating}>{previewGenerating ? 'Generating…' : 'Generate preview image'}</button>
+                                <button type="button" className="btn" onClick={handleGeneratePreview} disabled={previewGenerating}>{previewGenerating ? 'Generating…' : 'Generate preview image'}</button>
                     </div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{ previewUrl ? 'Unsaved' : '' }</div>
+                              <div style={{ fontSize: 12, color: 'var(--muted)' }}>{ previewUrl ? 'Unsaved' : '' }</div>
                   </div>
+                  {submitted && errors.preview && (
+                    <div className="error-text" style={{ marginTop: 8 }}>{errors.preview}</div>
+                  )}
                 </div>
               </div>
               {/* Responsive fallback: on narrow screens stack visually via CSS (keeps inline styles simple) */}
@@ -632,8 +639,8 @@ export default function Upload() {
           <button
             className="btn primary"
             type="submit"
-            disabled={!user || isSubmitting || cooldown}
-            aria-disabled={!user || isSubmitting || cooldown}
+            disabled={!user || isSubmitting || cooldown || !previewFile}
+            aria-disabled={!user || isSubmitting || cooldown || !previewFile}
             aria-busy={isSubmitting}
           >
             {isSubmitting ? 'Submitting…' : 'Submit'}
@@ -676,6 +683,8 @@ export default function Upload() {
                   setName(''); setDescription(''); setCategories([]);
                   setShowSuccess(true);
                   try { showToast('Submission posted'); } catch {}
+                  // After successful captcha-submitted post, redirect to home
+                  try { navigate('/'); } catch (_) {}
                 } catch (err) {
                   console.error('submission failed', err);
                   setStatus('error');

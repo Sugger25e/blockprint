@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import useReloadableNavigate from '../utils/useReloadableNavigate';
 import { getBuildStats } from '../utils/modelActions';
 
-export default function ModelCard({ model, actionLabel, onAction, managePath, showStatus, createdAt }) {
+export default function ModelCard({ model, actionLabel, onAction, managePath, showStatus, createdAt, viewFromProfile }) {
   // model may include either `previewImage` or `previewImageUrl` depending on server response
   const { id, name, description, url, categories, previewImage, previewImageUrl, ready } = model;
   const navigate = useReloadableNavigate();
@@ -21,7 +21,7 @@ export default function ModelCard({ model, actionLabel, onAction, managePath, sh
     return () => { cancelled = true; };
   }, [id]);
 
-  const openDetails = () => navigate(`/model/${encodeURIComponent(String(id))}`);
+  const openDetails = () => navigate(`/model/${encodeURIComponent(String(id))}${viewFromProfile ? '?from=profile' : ''}`);
 
   const statusLabel = (() => {
     if (!showStatus) return null;

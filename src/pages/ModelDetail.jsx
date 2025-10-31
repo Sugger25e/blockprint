@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useModels } from '../context/ModelsContext';
 import ModelViewer from '../components/ModelViewer';
 import { useAuth } from '../context/AuthContext';
@@ -77,6 +77,8 @@ export default function ModelDetail() {
   const { user } = useAuth();
   const { showToast } = useToast();
   const { confirm } = useConfirm();
+  const navigate = useNavigate();
+  const location = useLocation();
   const [likeCount, setLikeCount] = useState(null);
   const [liked, setLiked] = useState(false);
   const [favorited, setFavorited] = useState(false);
@@ -415,10 +417,7 @@ export default function ModelDetail() {
       return (
         <div className="detail" style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
           <div className="detail-header">
-            <a className="back-btn" href="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></a>
-              <a className="back-btn" href="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></a>
-              <a className="btn" href="/">Back to Discover</a>
-              <a className="btn" href="/">Back to Discover</a>
+            <button className="back-btn" onClick={(e)=>{ e.preventDefault(); const params = new URLSearchParams(location.search); if (params.get('from') === 'profile') return navigate('/profile'); return navigate(-1); }}><i className="fa-solid fa-arrow-left"></i><span>Back</span></button>
             <h2>Loading…</h2>
           </div>
           <div className="detail-layout" style={{ gap: 32 }}>
@@ -448,8 +447,7 @@ export default function ModelDetail() {
     return (
       <div className="detail" style={{ minHeight: '70vh', display: 'flex', flexDirection: 'column' }}>
         <div className="detail-header">
-          <a className="back-btn" href="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></a>
-            <a className="back-btn" href="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></a>
+          <button className="back-btn" onClick={(e)=>{ e.preventDefault(); const params = new URLSearchParams(location.search); if (params.get('from') === 'profile') return navigate('/profile'); return navigate(-1); }}><i className="fa-solid fa-arrow-left"></i><span>Back</span></button>
           <h2>Model</h2>
         </div>
         <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '24px' }}>
@@ -476,8 +474,7 @@ export default function ModelDetail() {
   return (
     <div className="detail" style={{ display: 'flex', flexDirection: 'column' }}>
       <div className="detail-header">
-  <a className="back-btn" href="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></a>
-    <a className="back-btn" href="/"><i className="fa-solid fa-arrow-left"></i><span>Back</span></a>
+        <button className="back-btn" onClick={(e)=>{ e.preventDefault(); const params = new URLSearchParams(location.search); if (params.get('from') === 'profile') return navigate('/profile'); return navigate(-1); }}><i className="fa-solid fa-arrow-left"></i><span>Back</span></button>
         <h2 title={model.name}>{model.name}</h2>
       </div>
 
