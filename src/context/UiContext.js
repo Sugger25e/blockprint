@@ -32,7 +32,10 @@ export function UiProvider({ children }) {
 
   function showToast(message, opts = {}) {
     const id = Date.now() + Math.random();
-    const t = { id, message, duration: opts.duration || 3200, closing: false };
+    // opts may be an object or a string/type shorthand
+    const type = typeof opts === 'string' ? opts : (opts && opts.type) || undefined;
+    const duration = (opts && opts.duration) || 3200;
+    const t = { id, message, duration, closing: false, type };
 
     // If there's no current toast, show immediately
     if (!toast) {
@@ -75,15 +78,26 @@ export function UiProvider({ children }) {
         {children}
 
         {/* Toast container - single toast (replace previous) */}
-        <div aria-live="polite" style={{ position: 'fixed', left: 0, right: 0, bottom: 24, display: 'flex', justifyContent: 'center', pointerEvents: 'none', zIndex: 2000 }}>
-          <div style={{ width: 'min(920px, 92%)', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
-            {toast && (
-              <div key={toast.id} className={`toast-item${toast.closing ? ' toast-exit' : ''}`} role="status" aria-live="polite" style={{ pointerEvents: 'auto', background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)', padding: '10px 14px', borderRadius: 8, boxShadow: '0 12px 32px rgba(0,0,0,0.12)', width: '100%', display: 'flex', justifyContent: 'center', fontSize: 14 }}>
+          {/* Toast container: center by default, but success toasts appear on the right side */}
+          {(!toast || toast.type !== 'success') && (
+            <div aria-live="polite" style={{ position: 'fixed', left: 0, right: 0, bottom: 24, display: 'flex', justifyContent: 'center', pointerEvents: 'none', zIndex: 2000 }}>
+              <div style={{ width: 'min(920px, 92%)', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
+                {toast && (
+                  <div key={toast.id} className={`toast-item${toast.closing ? ' toast-exit' : ''}`} role="status" aria-live="polite" style={{ pointerEvents: 'auto', background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)', padding: '10px 14px', borderRadius: 8, boxShadow: '0 12px 32px rgba(0,0,0,0.12)', width: '100%', display: 'flex', justifyContent: 'center', fontSize: 14 }}>
+                    {toast.message}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {toast && toast.type === 'success' && (
+            <div aria-live="polite" style={{ position: 'fixed', right: 20, bottom: 20, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', pointerEvents: 'none', zIndex: 2000 }}>
+              <div style={{ pointerEvents: 'auto', background: '#16a34a', color: 'white', border: '1px solid rgba(0,0,0,0.06)', padding: '10px 14px', borderRadius: 8, boxShadow: '0 12px 32px rgba(0,0,0,0.12)', fontSize: 14 }} className={`toast-item${toast.closing ? ' toast-exit' : ''}`}>
                 {toast.message}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          )}
 
         {/* Confirm dialog */}
         {confirmState && (

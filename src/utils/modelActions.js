@@ -68,3 +68,9 @@ export async function getMyLikes() {
   if (!res.ok) return { count: 0, ids: [] };
   return res.json();
 }
+
+export async function recordDownload(id) {
+  const res = await fetch(`${API_BASE}/api/builds/${encodeURIComponent(String(id))}/download`, { method: 'POST', credentials: 'include' });
+  if (!res.ok) return null;
+  return res.json();
+}

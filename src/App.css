@@ -57,6 +57,9 @@ body {
 .avatar-link img { display: block; width: 32px; height: 32px; border-radius: 50%; text-decoration: none; }
 .avatar-fallback { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--border); color: var(--text); font-weight: 600; text-decoration: none; }
 
+/* Primary-colored avatar initial (used when author/avatar not available on detail/user pages) */
+.avatar-initial-primary { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: white; font-weight: 700; text-decoration: none; }
+
 /* Ensure anchor underline doesn't appear for avatar links on hover/focus/active */
 .avatar-link, .avatar-link:link, .avatar-link:visited, .avatar-link:hover, .avatar-link:active, .avatar-link:focus { text-decoration: none; }
 
@@ -366,6 +369,26 @@ body, .navbar, .model-card, .detail-viewer, .mobile-menu, .btn, .page, .detail, 
 
 .model-card-author { font-size: 12px; color: var(--muted); margin-top: 6px; margin-bottom: 8px; }
 .model-card-desc { margin-top: 4px; color: var(--muted); font-size: 15px; max-height: 3em; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* Links inside muted/author contexts should inherit the muted color and remove underline */
+.muted a,
+.model-card-author a,
+.comment-author,
+.comment-author:link,
+.comment-author:visited,
+.comment-author:hover,
+.comment-author:active {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+/* On hover, author links become underlined and use the normal text color for better affordance */
+.muted a:hover,
+.model-card-author a:hover,
+.comment-author:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
 
 .upload-page h2 { margin-top: 0; }
 .form-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }

@@ -4,7 +4,7 @@ import { useModels } from '../context/ModelsContext';
 import ModelViewer from '../components/ModelViewer';
 import { useAuth } from '../context/AuthContext';
 import { useToast, useConfirm } from '../context/UiContext';
-import { getBuildStats, toggleLike as apiToggleLike, toggleFavorite as apiToggleFavorite, getComments as apiGetComments, postComment as apiPostComment, editComment as apiEditComment, deleteComment as apiDeleteComment } from '../utils/modelActions';
+import { getBuildStats, toggleLike as apiToggleLike, toggleFavorite as apiToggleFavorite, getComments as apiGetComments, postComment as apiPostComment, editComment as apiEditComment, deleteComment as apiDeleteComment, recordDownload as apiRecordDownload } from '../utils/modelActions';
 
 function MaterialRow({ mat }) {
   const icon = typeof mat.icon === 'string' ? mat.icon : '';
@@ -82,6 +82,9 @@ export default function ModelDetail() {
   const [likeCount, setLikeCount] = useState(null);
   const [liked, setLiked] = useState(false);
   const [favorited, setFavorited] = useState(false);
+  const [downloadCount, setDownloadCount] = useState(null);
+  const [dimensions, setDimensions] = useState(null);
+  const [dimsLoading, setDimsLoading] = useState(false);
   const [heartPulse, setHeartPulse] = useState(false);
   const [favPulse, setFavPulse] = useState(false);
   const [comments, setComments] = useState([]);
@@ -92,7 +95,6 @@ export default function ModelDetail() {
   const composerRef = useRef(null);
   const editRef = useRef(null);
   const hcaptchaWidgetIdRef = useRef(null);
-  const hcaptchaContainerRef = useRef(null);
   const modalHcaptchaContainerRef = useRef(null);
   const pendingCommentRef = useRef(null);
   const [showCaptchaDialog, setShowCaptchaDialog] = useState(false);
@@ -213,6 +215,119 @@ export default function ModelDetail() {
     return () => clearTimeout(timeout);
   }, [model]);
 
+  // Fetch and compute build dimensions (length x width x height) from .mcstructure if available
+  useEffect(() => {
+    if (!model) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const structUrl = model?.details?.structureUrl || model?.details?.mcstructureUrl || null;
+        if (!structUrl) return;
+        setDimsLoading(true);
+        const res = await fetch(structUrl, { cache: 'no-store' });
+        if (!res.ok) return;
+        const ab = await res.arrayBuffer();
+        // dynamic import the same NBT parser used in Upload.jsx
+        const NBT = await (0)('import("https://esm.sh/nbtify-readonly-typeless@1.1.2?keep-names")');
+        let nbtRaw;
+        try {
+          const r = await NBT.read(ab, { endian: 'little', strict: false });
+          nbtRaw = r?.data || r;
+        } catch (e) {
+          const r2 = await NBT.read(ab);
+          nbtRaw = r2?.data || r2;
+        }
+        if (cancelled) return;
+
+        // Helpers (lightweight, adapted from server utility)
+        const numericObjectToArray = (maybeObj) => {
+          if (!maybeObj) return [];
+          if (Array.isArray(maybeObj)) return maybeObj.slice();
+          if (typeof maybeObj === 'object') {
+            const keys = Object.keys(maybeObj).map(k => Number(k)).filter(n => Number.isFinite(n)).sort((a,b)=>a-b);
+            return keys.map(k => maybeObj[String(k)]);
+          }
+          return [maybeObj];
+        };
+        const getRoot = (nbt) => nbt?.data || nbt;
+        const getBlockPositionData = (root) => (
+          root?.structure?.palette?.default?.block_position_data ||
+          root?.structure?.palette?.block_position_data ||
+          root?.block_position_data ||
+          null
+        );
+        const getBlockIndices = (root) => {
+          const bi = root?.structure?.block_indices ?? root?.block_indices ?? root?.structure?.indices ?? null;
+          if (!bi) return [];
+          const layers = Array.isArray(bi) ? bi : [bi];
+          const out = [];
+          for (const layer of layers) {
+            const arr = numericObjectToArray(layer);
+            for (const v of arr) out.push(v);
+          }
+          return out;
+        };
+        const parsePosition = (key, entry) => {
+          const posArr = entry?.pos || entry?.position || entry?.Pos || null;
+          if (Array.isArray(posArr) && posArr.length >= 3) return [Number(posArr[0]), Number(posArr[1]), Number(posArr[2])];
+          if (typeof key === 'string' && key.includes(',')) {
+            const parts = key.split(',').map(s => Number(s.trim()));
+            if (parts.length >= 3 && parts.every(Number.isFinite)) return parts.slice(0,3);
+          }
+          if (entry && typeof entry === 'object') {
+            const maybe = [entry[0], entry[1], entry[2]];
+            if (maybe.every(v => typeof v === 'number')) return maybe.map(Number);
+          }
+          return null;
+        };
+        const computeDimensions = (root) => {
+          // 1) try explicit size
+          const sizeRaw = root?.structure?.size || root?.size || null;
+          if (sizeRaw) {
+            const arr = numericObjectToArray(sizeRaw).map(Number);
+            if (arr.length >= 3 && arr.slice(0,3).every(Number.isFinite)) {
+              const x = arr[0], y = arr[1], z = arr[2];
+              return { length: Math.abs(x), width: Math.abs(z), height: Math.abs(y) };
+            }
+          }
+          // 2) infer from block_position_data
+          const bp = getBlockPositionData(root) || {};
+          let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity, minZ=Infinity, maxZ=-Infinity;
+          let found = false;
+          for (const k of Object.keys(bp)) {
+            const entry = bp[k];
+            const pos = parsePosition(k, entry);
+            if (!pos) continue;
+            const [x,y,z] = pos.map(Number);
+            if (![x,y,z].every(Number.isFinite)) continue;
+            found = true;
+            if (x < minX) minX = x; if (x > maxX) maxX = x;
+            if (y < minY) minY = y; if (y > maxY) maxY = y;
+            if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+          }
+          if (found) {
+            const length = Math.abs(maxX - minX) + 1;
+            const height = Math.abs(maxY - minY) + 1;
+            const width = Math.abs(maxZ - minZ) + 1;
+            return { length, width, height };
+          }
+          // 3) fallback: if block_indices exist, use layers as height
+          const bi = getBlockIndices(root);
+          if (bi && bi.length > 0) return { length: 0, width: 0, height: bi.length };
+          return { length: 0, width: 0, height: 0 };
+        };
+        const root = getRoot(nbtRaw);
+        const dims = computeDimensions(root || {});
+        if (!cancelled) setDimensions(dims);
+      } catch (e) {
+        // ignore parse errors
+      } finally {
+        if (!cancelled) setDimsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [model]);
+
   function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
     const words = (text || '').split(' ');
     let line = '';
@@ -280,6 +395,9 @@ export default function ModelDetail() {
           setLikeCount(typeof stats.likeCount === 'number' ? stats.likeCount : null);
           setLiked(!!stats.liked);
           setFavorited(!!stats.favorited);
+          // support several possible stat property names for downloads
+          const d = typeof stats.downloadCount === 'number' ? stats.downloadCount : (typeof stats.downloads === 'number' ? stats.downloads : (typeof stats.download === 'number' ? stats.download : null));
+          setDownloadCount(d != null ? d : null);
         }
       } catch (_) {}
       try {
@@ -322,6 +440,11 @@ export default function ModelDetail() {
   }
 
   async function downloadHoloprint(url, filename) {
+    // Record download when user presses the button (best-effort).
+    try {
+      setDownloadCount(prev => (typeof prev === 'number' ? prev + 1 : 1));
+      apiRecordDownload(model.id).catch(() => {});
+    } catch (_) {}
     try {
       const res = await fetch(url, { credentials: 'omit' });
       if (!res.ok) throw new Error('download failed');
@@ -332,10 +455,14 @@ export default function ModelDetail() {
       a.download = filename || 'holoprint.mcpack';
       document.body.appendChild(a);
       a.click();
+  try { showToast('Holoprint download started', 'success'); } catch (e) {}
       a.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
     } catch (_e) {
-      try { window.open(url, '_blank', 'noopener,noreferrer'); } catch (_) {}
+      try {
+        window.open(url, '_blank', 'noopener,noreferrer');
+  try { showToast('Opened holoprint in a new tab', 'success'); } catch (e) {}
+      } catch (_) {}
     }
   }
 
@@ -488,6 +615,7 @@ export default function ModelDetail() {
         allowZoom
             ambientIntensity={ambientIntensity}
         modelId={model.id}
+        showGrid={true}
       />
       {/* viewer overlay controls (like / favorite) placed top-right */}
       <div className="viewer-controls" aria-hidden={false}>
@@ -533,8 +661,21 @@ export default function ModelDetail() {
         </button>
       </div>
 
-      {typeof likeCount === 'number' && (
-        <div className="viewer-like-badge" aria-hidden="true">{likeCount} likes</div>
+      {(typeof likeCount === 'number' || typeof downloadCount === 'number') && (
+        <div className="viewer-like-badge" aria-hidden="true" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {typeof likeCount === 'number' && (
+            <span title={`${likeCount} likes`} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+              <i className="fa-solid fa-heart" style={{ color: '#ef4444', fontSize: 13 }} aria-hidden="true"></i>
+              <span style={{ fontSize: 13 }}>{likeCount}</span>
+            </span>
+          )}
+          {typeof downloadCount === 'number' && (
+            <span title={`${downloadCount} downloads`} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+              <i className="fa-solid fa-download" style={{ color: 'var(--muted)', fontSize: 13 }} aria-hidden="true"></i>
+              <span style={{ fontSize: 13 }}>{downloadCount}</span>
+            </span>
+          )}
+        </div>
       )}
     </div>
 
@@ -591,11 +732,19 @@ export default function ModelDetail() {
                   <div className="credits-row">
                     {model.credits.author && (
                       <div className="author" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {model.credits.avatarUrl && (
+                        {model.credits.avatarUrl ? (
                           <img src={model.credits.avatarUrl} alt="Author avatar" width={28} height={28} style={{ borderRadius: '50%' }} />
+                        ) : (
+                          <span className="avatar-initial-primary" aria-hidden="true">{String(model.credits.author || '').charAt(0).toUpperCase() || '?'}</span>
                         )}
                         <span className="author-label">Author:</span>
-                        <span className="author-name">{model.credits.author}</span>
+                        <a
+                          className="author-name"
+                          href={`/user/${encodeURIComponent(String(model.credits.author || ''))}`}
+                          onClick={(e) => { e.preventDefault(); try { navigate(`/user/${encodeURIComponent(String(model.credits.author || ''))}`); } catch (_) {} }}
+                        >
+                          {model.credits.author}
+                        </a>
                       </div>
                     )}
                     {Array.isArray(model.credits.socials) && model.credits.socials.length > 0 && (
@@ -749,10 +898,29 @@ export default function ModelDetail() {
                     {comments.length === 0 && <p className="muted">No comments yet.</p>}
                     {comments.map(c => (
                       <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
-                        {c.avatarUrl ? <img src={c.avatarUrl} alt="avatar" width={36} height={36} style={{ borderRadius: '50%' }} /> : <div style={{ width: 36 }} />}
+                        {/* clickable avatar -> author page */}
+                        <a
+                          href={`/user/${encodeURIComponent(String(c.username || ''))}`}
+                          onClick={(e) => { e.preventDefault(); try { navigate(`/user/${encodeURIComponent(String(c.username || ''))}`); } catch (_) {} }}
+                          style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}
+                          title={c.username}
+                        >
+                          {c.avatarUrl ? (
+                            <img src={c.avatarUrl} alt={`${c.username} avatar`} width={36} height={36} style={{ borderRadius: '50%', display: 'block' }} />
+                          ) : (
+                            <span className="avatar-initial-primary" aria-hidden="true" style={{ width: 36, height: 36, fontSize: 14 }}>{(c.username || '?').charAt(0).toUpperCase()}</span>
+                          )}
+                        </a>
                         <div style={{ flex: 1 }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <div style={{ fontWeight: 600 }}>{c.username}</div>
+                            <a
+                              className="comment-author"
+                              href={`/user/${encodeURIComponent(String(c.username || ''))}`}
+                              onClick={(e) => { e.preventDefault(); try { navigate(`/user/${encodeURIComponent(String(c.username || ''))}`); } catch (_) {} }}
+                              style={{ fontWeight: 600, color: 'inherit', textDecoration: 'none' }}
+                            >
+                              {c.username}
+                            </a>
                             <div className="muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: 12 }}>{new Date(c.createdAt).toLocaleString()}</div>
                             {user && c.userId && (
                               <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
@@ -833,6 +1001,17 @@ export default function ModelDetail() {
           {model.publishedAt && (
             <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
               Published {new Date(model.publishedAt).toLocaleDateString()}
+            </div>
+          )}
+
+          {/* Dimensions (computed from .mcstructure when available) */}
+          {dimsLoading && (
+            <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>Detecting dimensions…</div>
+          )}
+          {dimensions && (typeof dimensions.length === 'number') && (
+            <div style={{ marginTop: 8 }}>
+              <h3 style={{ margin: '0 0 6px' }}>Dimensions</h3>
+              <div className="muted">{dimensions.length} × {dimensions.width} × {dimensions.height} blocks</div>
             </div>
           )}
 

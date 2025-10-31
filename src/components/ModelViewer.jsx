@@ -52,6 +52,30 @@ function GLTFModel({ url, onLoaded }) {
   return <primitive ref={group} object={scene} dispose={null} />;
 }
 
+function GridPlatform({ object, size = 64, divisions = 64 }) {
+  if (!object) return null;
+  try {
+    const box = new THREE.Box3().setFromObject(object);
+    if (box.isEmpty()) return null;
+    const center = box.getCenter(new THREE.Vector3());
+    const sizeVec = box.getSize(new THREE.Vector3());
+    const width = Math.max(size, Math.max(sizeVec.x, sizeVec.z) * 2);
+    const minY = box.min.y;
+
+    return (
+      <group position={[center.x, 0, center.z]}>
+        <gridHelper args={[Math.max(8, width), divisions, '#6b7280', '#374151']} position={[0, minY - 0.01, 0]} rotation={[0, 0, 0]} />
+        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, minY - 0.02, 0]}>
+          <planeGeometry args={[width, width]} />
+          <meshBasicMaterial color={'#000000'} transparent opacity={0.28} depthWrite={false} />
+        </mesh>
+      </group>
+    );
+  } catch (e) {
+    return null;
+  }
+}
+
 function CameraStateSync({ modelId, saved, setState, controlsRef, loaded }) {
   const { camera } = useThree();
   useEffect(() => {
@@ -181,11 +205,10 @@ function ModelViewerImpl({ url, style, allowZoom = true, background = 'var(--vie
           makeDefault
         />
         <CameraStateSync modelId={modelId} saved={saved} setState={setState} controlsRef={controlsRef} loaded={!!loadedObj} />
+        {/* 3D platform grid under the model when requested */}
+        {showGrid && loadedObj && <GridPlatform object={loadedObj} />}
       </Canvas>
-      {/* Optional non-interactive grid overlay for framing/capture guidance. Pointer events disabled so it doesn't interfere with controls. */}
-      {showGrid && (
-        <div aria-hidden="true" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 5, backgroundImage: 'linear-gradient(rgba(255,255,255,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.06) 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
-      )}
+      {/* 2D overlay grid removed — using 3D GridPlatform only */}
       {/* Centered spinner while the GLTF hasn't finished loading */}
       {!loadedObj && !loadError && (
         <div className="viewer-spinner" role="status" aria-live="polite">

@@ -65,8 +65,8 @@ export default function Navbar() {
             </button>
           </div>
 
-          {/* Reserve a fixed box for avatar / login to avoid layout jumps on reload */}
-          <div style={{ width: 56, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {/* Reserve a box for avatar / login to avoid layout jumps on reload. Increased to fit a rectangular login button. */}
+          <div style={{ minWidth: 84, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {loading ? (
               <div className="skeleton" style={{ width: 32, height: 32, borderRadius: '50%' }} />
             ) : user ? (
@@ -80,9 +80,15 @@ export default function Navbar() {
                 </a>
               </div>
             ) : (
-              /* show a compact icon-only login button to fit the reserved box */
-              <button className="btn small" onClick={login} title="Login" style={{ width: 36, height: 36, padding: 6, borderRadius: 999 }}>
-                <i className="fa-brands fa-discord" aria-hidden="true"></i>
+              /* show a rounded-rectangle login button with discord icon + text */
+              <button
+                className="btn"
+                onClick={login}
+                title="Login"
+                style={{ minWidth: 84, height: 36, padding: '6px 10px', borderRadius: 18, display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }}
+              >
+                <i className="fa-brands fa-discord" aria-hidden="true" />
+                <span>Login</span>
               </button>
             )}
           </div>

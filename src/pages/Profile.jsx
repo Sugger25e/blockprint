@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import useReloadableNavigate from '../utils/useReloadableNavigate';
-import { getMyFavorites, getMyLikes } from '../utils/modelActions';
+import { getMyFavorites, getMyLikes, getBuildStats } from '../utils/modelActions';
 import { useConfirm, useToast } from '../context/UiContext';
 import ModelCard from '../components/ModelCard';
 
@@ -15,6 +15,8 @@ export default function Profile() {
   const [favorites, setFavorites] = useState([]);
   const [likesCount, setLikesCount] = useState(0);
   const [likesLoading, setLikesLoading] = useState(true);
+  const [downloadsTotal, setDownloadsTotal] = useState(0);
+  const [downloadsLoading, setDownloadsLoading] = useState(true);
   const { confirm } = useConfirm();
   const { showToast } = useToast();
   const navigate = useReloadableNavigate();
@@ -94,6 +96,37 @@ export default function Profile() {
     })();
     return () => { cancelled = true; };
   }, [user]);
+
+  // Aggregate downloads across the user's published builds
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        setDownloadsLoading(true);
+        if (!myBuilds || myBuilds.length === 0) {
+          if (!cancelled) setDownloadsTotal(0);
+          return;
+        }
+        let total = 0;
+        for (const b of myBuilds) {
+          try {
+            const s = await getBuildStats(b.id || b.numericId || b.buildId);
+            if (!s) continue;
+            const d = Number(s.downloadCount) || Number(s.downloads) || Number(s.download) || 0;
+            total += d;
+          } catch (_) {}
+          if (cancelled) return;
+        }
+        if (!cancelled) setDownloadsTotal(total);
+      } catch (_) {
+        if (!cancelled) setDownloadsTotal(0);
+      } finally {
+        if (!cancelled) setDownloadsLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [myBuilds, user]);
 
   const onDelete = async (id) => {
     try {
@@ -241,16 +274,19 @@ export default function Profile() {
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
           <div style={{ fontWeight: 600 }}>Liked models</div>
           <div className="muted">{likesLoading ? '-' : likesCount}</div>
+          <div style={{ width: 12 }} />
+          <div style={{ fontWeight: 600 }}>Downloads</div>
+          <div className="muted">{downloadsLoading ? '-' : downloadsTotal}</div>
         </div>
 
         <div style={{ marginTop: 12 }}>
           <h4>Your favorites</h4>
-          {favorites.length === 0 ? (
+              {favorites.length === 0 ? (
             <p className="muted">You have no favorites yet.</p>
           ) : (
             <div className="grid" style={{ gap: 12 }}>
               {favorites.map(m => (
-                <ModelCard key={m.id} model={m} />
+                <ModelCard key={m.id} model={m} showAuthor />
               ))}
             </div>
           )}

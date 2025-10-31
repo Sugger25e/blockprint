@@ -2,20 +2,25 @@ import React, { useEffect, useState } from 'react';
 import useReloadableNavigate from '../utils/useReloadableNavigate';
 import { getBuildStats } from '../utils/modelActions';
 
-export default function ModelCard({ model, actionLabel, onAction, managePath, showStatus, createdAt, viewFromProfile }) {
+export default function ModelCard({ model, actionLabel, onAction, managePath, showStatus, createdAt, viewFromProfile, showAuthor }) {
   // model may include either `previewImage` or `previewImageUrl` depending on server response
   const { id, name, description, url, categories, previewImage, previewImageUrl, ready } = model;
   const navigate = useReloadableNavigate();
 
   const imgSrc = previewImage || previewImageUrl || null;
   const [likeCount, setLikeCount] = useState(null);
+  const [downloadCount, setDownloadCount] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
         const s = await getBuildStats(id);
-        if (!cancelled && s) setLikeCount(typeof s.likeCount === 'number' ? s.likeCount : null);
+        if (!cancelled && s) {
+          setLikeCount(typeof s.likeCount === 'number' ? s.likeCount : null);
+          const d = typeof s.downloadCount === 'number' ? s.downloadCount : (typeof s.downloads === 'number' ? s.downloads : (typeof s.download === 'number' ? s.download : null));
+          setDownloadCount(d != null ? d : null);
+        }
       } catch (_) {}
     })();
     return () => { cancelled = true; };
@@ -55,10 +60,20 @@ export default function ModelCard({ model, actionLabel, onAction, managePath, sh
             <span className="sr-only">Loading preview</span>
           </div>
         )}
-        {typeof likeCount === 'number' && (
-          <div className="model-like-badge" title={`${likeCount} likes`}>
-            <i className="fa-solid fa-heart" style={{ color: '#ef4444', fontSize: 13 }} aria-hidden="true"></i>
-            <span style={{ fontSize: 13 }}>{likeCount}</span>
+        {(typeof likeCount === 'number' || typeof downloadCount === 'number') && (
+          <div className="model-like-badge" title={`${likeCount || 0} likes · ${downloadCount || 0} downloads`}>
+            {typeof likeCount === 'number' && (
+              <>
+                <i className="fa-solid fa-heart" style={{ color: '#ef4444', fontSize: 13 }} aria-hidden="true"></i>
+                <span style={{ fontSize: 13 }}>{likeCount}</span>
+              </>
+            )}
+            {typeof downloadCount === 'number' && (
+              <>
+                <i className="fa-solid fa-download" style={{ color: 'var(--muted)', fontSize: 13 }} aria-hidden="true"></i>
+                <span style={{ fontSize: 13 }}>{downloadCount}</span>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -73,6 +88,21 @@ export default function ModelCard({ model, actionLabel, onAction, managePath, sh
           {createdAt && (
             <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{new Date(createdAt).toLocaleString()}</div>
           )}
+          {/* Optionally show author if requested (profile favorites) */}
+          {showAuthor && (() => {
+            // Determine author name from common shapes
+            const credits = model?.credits;
+            let authorName = null;
+            if (typeof credits === 'string') authorName = credits;
+            else if (credits && typeof credits === 'object') authorName = credits.author || null;
+            else if (model?.author) authorName = model.author;
+            if (!authorName) return null;
+            return (
+              <div className="muted" style={{ fontSize: 13, marginTop: 6 }}>
+                by <a href={`/user/${encodeURIComponent(authorName)}`} onClick={(e) => { e.preventDefault(); navigate(`/user/${encodeURIComponent(authorName)}`); }}>{authorName}</a>
+              </div>
+            );
+          })()}
           {/* author removed per design: don't show author on cards */}
           {description && <div className="model-card-desc" title={description}>{description}</div>}
           {Array.isArray(categories) && categories.length > 0 && (

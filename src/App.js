@@ -10,6 +10,7 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Home from './pages/Home';
 import ModelDetail from './pages/ModelDetail';
+import User from './pages/User';
 import Upload from './pages/Upload';
 import Profile from './pages/Profile';
 import About from './pages/About';
@@ -43,6 +44,7 @@ function App() {
                     <Route path="/terms" element={<Terms />} />
                     <Route path="/privacy" element={<Privacy />} />
                     <Route path="/model/:id" element={<ModelDetail />} />
+                    <Route path="/user/:author" element={<User />} />
                     <Route path="/admin" element={<Admin />} />
                     <Route path="/admin/manage/:id" element={<ManageEdit />} />
                     <Route path="/profile/:userid/manage/:id" element={<ProfileManage />} />

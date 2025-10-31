@@ -137,7 +137,7 @@ export default function Home() {
             const start = (current - 1) * PER_PAGE;
             const pageItems = filtered.slice(start, start + PER_PAGE);
             return pageItems.map((m) => (
-              <ModelCard key={m.id} model={m} />
+              <ModelCard key={m.id} model={m} showAuthor />
             ));
           })()}
         </div>
