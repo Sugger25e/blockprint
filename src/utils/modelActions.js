@@ -57,6 +57,15 @@ export async function deleteComment(id, commentId) {
   return res.json();
 }
 
+export async function toggleCommentLike(id, commentId) {
+  const res = await fetch(`${API_BASE}/api/builds/${encodeURIComponent(String(id))}/comments/${encodeURIComponent(String(commentId))}/like`, {
+    method: 'POST',
+    credentials: 'include'
+  });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 export async function getMyFavorites() {
   const res = await fetch(`${API_BASE}/api/my/favorites`, { credentials: 'include' });
   if (!res.ok) return { favorites: [] };

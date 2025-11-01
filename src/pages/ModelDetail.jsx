@@ -4,7 +4,7 @@ import { useModels } from '../context/ModelsContext';
 import ModelViewer from '../components/ModelViewer';
 import { useAuth } from '../context/AuthContext';
 import { useToast, useConfirm } from '../context/UiContext';
-import { getBuildStats, toggleLike as apiToggleLike, toggleFavorite as apiToggleFavorite, getComments as apiGetComments, postComment as apiPostComment, editComment as apiEditComment, deleteComment as apiDeleteComment, recordDownload as apiRecordDownload } from '../utils/modelActions';
+import { getBuildStats, toggleLike as apiToggleLike, toggleFavorite as apiToggleFavorite, getComments as apiGetComments, postComment as apiPostComment, editComment as apiEditComment, deleteComment as apiDeleteComment, recordDownload as apiRecordDownload, toggleCommentLike as apiToggleCommentLike } from '../utils/modelActions';
 
 function MaterialRow({ mat }) {
   const icon = typeof mat.icon === 'string' ? mat.icon : '';
@@ -92,6 +92,8 @@ export default function ModelDetail() {
   const [posting, setPosting] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editingText, setEditingText] = useState('');
+  const [commentCount, setCommentCount] = useState(null);
+  const [pendingCommentLikes, setPendingCommentLikes] = useState({});
   const composerRef = useRef(null);
   const editRef = useRef(null);
   const hcaptchaWidgetIdRef = useRef(null);
@@ -175,6 +177,66 @@ export default function ModelDetail() {
     el.style.height = 'auto';
     el.style.height = (el.scrollHeight) + 'px';
   }
+
+  function normalizeComment(comment) {
+    if (!comment) return null;
+    const likeCount = typeof comment.likeCount === 'number' ? comment.likeCount : 0;
+    return {
+      ...comment,
+      likeCount,
+      liked: !!comment.liked
+    };
+  }
+
+  function formatDate(iso) {
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return '';
+    return new Intl.DateTimeFormat('en-US', {
+      month: '2-digit', day: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: true
+    }).format(d);
+  }
+
+  function adjustCommentCount(delta) {
+    setCommentCount(prev => {
+      const fallbackBase = Array.isArray(comments) ? comments.length : 0;
+      const fallback = Math.max(fallbackBase + delta, 0);
+      if (typeof prev === 'number') {
+        const next = prev + delta;
+        return next < 0 ? 0 : next;
+      }
+      return fallback;
+    });
+  }
+
+  const handleToggleCommentLike = async (commentId) => {
+    if (!model) return;
+    if (!commentId) return;
+    const key = String(commentId);
+    if (pendingCommentLikes[key]) return;
+    if (!user) {
+      try { showToast('Log in to like comments'); } catch (_) {}
+      return;
+    }
+    setPendingCommentLikes(prev => ({ ...prev, [key]: true }));
+    try {
+      const res = await apiToggleCommentLike(model.id, commentId);
+      if (!res || typeof res.likeCount !== 'number') throw new Error('Invalid response');
+      setComments(prev => prev.map(c => (
+        String(c.id) === key ? { ...c, liked: !!res.liked, likeCount: res.likeCount } : c
+      )));
+    } catch (err) {
+      console.error('toggle comment like failed', err);
+      try { showToast('Could not update like'); } catch (_) {}
+    } finally {
+      setPendingCommentLikes(prev => {
+        const next = { ...prev };
+        delete next[key];
+        return next;
+      });
+    }
+  };
 
   useEffect(() => {
     if (!model) return;
@@ -398,11 +460,21 @@ export default function ModelDetail() {
           // support several possible stat property names for downloads
           const d = typeof stats.downloadCount === 'number' ? stats.downloadCount : (typeof stats.downloads === 'number' ? stats.downloads : (typeof stats.download === 'number' ? stats.download : null));
           setDownloadCount(d != null ? d : null);
+          setCommentCount(typeof stats.commentsCount === 'number' ? stats.commentsCount : null);
         }
       } catch (_) {}
       try {
         const cRes = await apiGetComments(model.id);
-        if (!cancelled && cRes?.comments) setComments(cRes.comments || []);
+        if (!cancelled && cRes?.comments) {
+          const normalized = (cRes.comments || []).map(normalizeComment).filter(Boolean);
+          setComments(normalized);
+          setPendingCommentLikes({});
+          setCommentCount(prev => {
+            if (typeof cRes.total === 'number') return cRes.total;
+            if (prev != null) return prev;
+            return normalized.length;
+          });
+        }
       } catch (_) {}
     })();
     return () => { cancelled = true; };
@@ -597,6 +669,7 @@ export default function ModelDetail() {
   const showCollapse = materials.length > 8;
   const visibleMaterials = showCollapse && !materialsExpanded ? materials.slice(0, 8) : materials;
   const hiddenCount = materials.length - 8;
+  const commentDisplayCount = commentCount != null ? commentCount : comments.length;
 
   return (
     <div className="detail" style={{ display: 'flex', flexDirection: 'column' }}>
@@ -775,7 +848,7 @@ export default function ModelDetail() {
 
                 {/* Comments: placed under credits (not in the aside) */}
                 <div className="comments" style={{ marginTop: 14 }}>
-                  <h3>Comments</h3>
+                  <h3>Comments{commentDisplayCount > 0 ? ` (${commentDisplayCount})` : ''}</h3>
 
                   {/* Comment composer (shows avatar + placeholder) */}
                   <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 8 }}>
@@ -811,7 +884,11 @@ export default function ModelDetail() {
                               try {
                                 const r = await apiPostComment(model.id, text);
                                 if (r?.comment) {
-                                  setComments(prev => [r.comment, ...prev]);
+                                  const normalized = normalizeComment(r.comment);
+                                  if (normalized) {
+                                    setComments(prev => [normalized, ...prev]);
+                                    adjustCommentCount(1);
+                                  }
                                   setCommentText('');
                                   if (composerRef.current) composerRef.current.style.height = 'auto';
                                   try { showToast('Comment posted'); } catch {}
@@ -868,7 +945,11 @@ export default function ModelDetail() {
                                       pendingCommentRef.current = null;
                                       const r = await apiPostComment(model.id, txt, token);
                                       if (r?.comment) {
-                                        setComments(prev => [r.comment, ...prev]);
+                                        const normalized = normalizeComment(r.comment);
+                                        if (normalized) {
+                                          setComments(prev => [normalized, ...prev]);
+                                          adjustCommentCount(1);
+                                        }
                                         setCommentText('');
                                         if (composerRef.current) composerRef.current.style.height = 'auto';
                                         try { showToast('Comment posted'); } catch {}
@@ -896,8 +977,15 @@ export default function ModelDetail() {
                   <div className="comments-divider" />
                   <div style={{ marginTop: 12 }}>
                     {comments.length === 0 && <p className="muted">No comments yet.</p>}
-                    {comments.map(c => (
-                      <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
+                    {comments.map((c) => {
+                      const key = String(c.id);
+                      const likeCount = typeof c.likeCount === 'number' ? c.likeCount : 0;
+                      const isPendingLike = !!pendingCommentLikes[key];
+                      const likeIconClass = c.liked ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
+                      const likeLabel = `${likeCount} ${likeCount === 1 ? 'like' : 'likes'}`;
+                      const likeTitle = c.liked ? 'Unlike comment' : 'Like comment';
+                      return (
+                        <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
                         {/* clickable avatar -> author page */}
                         <a
                           href={`/user/${encodeURIComponent(String(c.username || ''))}`}
@@ -921,44 +1009,65 @@ export default function ModelDetail() {
                             >
                               {c.username}
                             </a>
-                            <div className="muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: 12 }}>{new Date(c.createdAt).toLocaleString()}</div>
-                            {user && c.userId && (
-                              <div style={{ marginLeft: 'auto', display: 'flex', gap: 4 }}>
-                                {/* Edit only for the comment owner */}
-                                {String(c.userId) === String(user.userId) && (
-                                  <button
-                                    className="comment-action-icon"
-                                    title="Edit comment"
-                                    aria-label="Edit comment"
-                                    onClick={() => { setEditingId(c.id); setEditingText(c.text); }}
-                                  >
-                                    <i className="fa-solid fa-pen" aria-hidden="true"></i>
-                                  </button>
-                                )}
+                            <div className="muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: 12 }}>{formatDate(c.createdAt)}</div>
+                            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: 12, color: 'var(--muted)' }}>{likeLabel}</span>
+                              <button
+                                className="comment-action-icon"
+                                title={likeTitle}
+                                aria-label={likeTitle}
+                                aria-pressed={!!c.liked}
+                                onClick={() => handleToggleCommentLike(c.id)}
+                                disabled={isPendingLike}
+                                style={{ color: c.liked ? 'var(--danger, #ef4444)' : undefined, opacity: isPendingLike ? 0.5 : 1 }}
+                              >
+                                <i className={likeIconClass} aria-hidden="true"></i>
+                              </button>
 
-                                {/* Delete allowed for owner or admins */}
-                                {(String(c.userId) === String(user.userId) || !!user.isAdmin) && (
-                                  <button
-                                    className="comment-action-icon"
-                                    title="Delete comment"
-                                    aria-label="Delete comment"
-                                    onClick={async () => {
-                                      try {
-                                        const ok = await confirm('Delete this comment?');
-                                        if (!ok) return;
-                                        const r = await apiDeleteComment(model.id, c.id);
-                                        if (r?.ok) {
-                                          setComments(prev => prev.filter(x => x.id !== c.id));
-                                          try { showToast('Comment deleted'); } catch {}
-                                        }
-                                      } catch (_) {}
-                                    }}
-                                  >
-                                    <i className="fa-solid fa-trash" aria-hidden="true"></i>
-                                  </button>
-                                )}
-                              </div>
-                            )}
+                              {user && c.userId && (
+                                <>
+                                  {String(c.userId) === String(user.userId) && (
+                                    <button
+                                      className="comment-action-icon"
+                                      title="Edit comment"
+                                      aria-label="Edit comment"
+                                      onClick={() => { setEditingId(c.id); setEditingText(c.text); }}
+                                    >
+                                      <i className="fa-solid fa-pen" aria-hidden="true"></i>
+                                    </button>
+                                  )}
+
+                                  {(String(c.userId) === String(user.userId) || !!user.isAdmin) && (
+                                    <button
+                                      className="comment-action-icon"
+                                      title="Delete comment"
+                                      aria-label="Delete comment"
+                                      onClick={async () => {
+                                        try {
+                                          const ok = await confirm('Delete this comment?');
+                                          if (!ok) return;
+                                          const r = await apiDeleteComment(model.id, c.id);
+                                          if (r?.ok) {
+                                            setComments(prev => prev.filter(x => x.id !== c.id));
+                                            adjustCommentCount(-1);
+                                            setPendingCommentLikes(prev => {
+                                              const pendingKey = String(c.id);
+                                              if (!prev[pendingKey]) return prev;
+                                              const copy = { ...prev };
+                                              delete copy[pendingKey];
+                                              return copy;
+                                            });
+                                            try { showToast('Comment deleted'); } catch {}
+                                          }
+                                        } catch (_) {}
+                                      }}
+                                    >
+                                      <i className="fa-solid fa-trash" aria-hidden="true"></i>
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            </div>
                           </div>
 
                           {editingId === c.id ? (
@@ -977,7 +1086,10 @@ export default function ModelDetail() {
                                   try {
                                     const r = await apiEditComment(model.id, c.id, editingText.trim());
                                     if (r?.comment) {
-                                      setComments(prev => prev.map(p => p.id === c.id ? r.comment : p));
+                                      const normalized = normalizeComment(r.comment);
+                                      if (normalized) {
+                                        setComments(prev => prev.map(p => p.id === c.id ? normalized : p));
+                                      }
                                       setEditingId(null);
                                       setEditingText('');
                                       try { showToast('Comment updated'); } catch {}
@@ -988,11 +1100,12 @@ export default function ModelDetail() {
                               </div>
                             </div>
                           ) : (
-                            <div className="muted" style={{ marginTop: 6 }}>{c.text}</div>
+                            <div className="muted" style={{ marginTop: 2 }}>{c.text}</div>
                           )}
                         </div>
-                      </div>
-                    ))}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </div>
