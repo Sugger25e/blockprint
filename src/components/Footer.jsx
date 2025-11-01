@@ -7,6 +7,7 @@ export default function Footer() {
       <div className="footer-inner">
         <div className="footer-left">© {year} KuSug. All rights reserved.</div>
         <nav className="footer-nav" aria-label="Footer">
+          <a href="https://discord.gg/3q97qPZmAC" className='muted' target="_blank" rel="noopener noreferrer">Discord</a>
           <a href="/terms" className="muted">Terms</a>
           <a href="/privacy" className="muted">Privacy</a>
         </nav>

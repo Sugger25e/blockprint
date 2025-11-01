@@ -503,19 +503,25 @@ export default function ManageEdit({ ownerMode = false }) {
             {glbFile && <div className="file-meta">{glbFile.name} • {(glbFile.size/1024/1024).toFixed(2)} MB</div>}
             <div style={{ marginTop: 8 }}>
               <div style={{ display: 'flex', gap: 12, width: '100%', maxWidth: 920, height: 280, minHeight: 280, maxHeight: 280, boxSizing: 'border-box', overflow: 'hidden' }}>
-                {/* Left: model viewer - take half the width */}
-                <div style={{ flex: 1, minWidth: 0, minHeight: 0, height: '100%', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', display: 'flex' }}>
-                  <ModelViewer url={glbPreviewUrl || model.url} fitMargin={4.0} background={'var(--viewer-bg)'} ref={(el)=>{ if (el) viewerRef.current = el; }} style={{ width: '100%', height: '100%' }} />
+                {/* Left: model viewer - take half the width (wrapped with 2D grid overlay) */}
+                <div style={{ flex: 1, minWidth: 0, minHeight: 0, height: '100%', display: 'flex' }}>
+                  <div className="preview-grid-container" style={{ width: '100%', height: '100%' }}>
+                    <div className="preview-grid-overlay" aria-hidden="true" />
+                    <ModelViewer url={glbPreviewUrl || model.url} fitMargin={4.0} background={'var(--viewer-bg)'} ref={(el)=>{ if (el) viewerRef.current = el; }} style={{ width: '100%', height: '100%' }} />
+                  </div>
                 </div>
 
                 {/* Right: preview area - take half the width */}
                 <div style={{ flex: 1, minWidth: 0, height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                    { (previewUrlLocal || model.previewImage) ? (
-                      <img src={previewUrlLocal || model.previewImage} alt="Preview" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }} />
-                    ) : (
-                      <div className="muted" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: '1px dashed var(--border)' }}>No preview</div>
-                    )}
+                    <div className="preview-grid-container">
+                      <div className="preview-grid-overlay" aria-hidden="true" />
+                      { (previewUrlLocal || model.previewImage) ? (
+                        <img src={previewUrlLocal || model.previewImage} alt="Preview" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <div className="muted" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>No preview</div>
+                      )}
+                    </div>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
                     <div style={{ display: 'flex', gap: 8 }}>
