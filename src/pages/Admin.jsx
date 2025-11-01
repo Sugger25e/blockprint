@@ -436,8 +436,9 @@ export default function Admin() {
     // Client-side validation: require name, .glb, .mcstructure, and at least one category
     const errors = {};
     if (!upName || !String(upName).trim()) errors.name = 'Build name is required';
-    if (!upGlb) errors.glb = 'A .glb file is required';
-    if (!upMc) errors.mc = 'A .mcstructure file is required';
+  if (!upGlb) errors.glb = 'A .glb file is required';
+  if (!upMc) errors.mc = 'A .mcstructure file is required';
+  if (!upPreviewFile) errors.preview = 'Generate a preview image before submitting';
     if (!Array.isArray(finalCategories) || finalCategories.length === 0) errors.categories = 'Add at least one category';
     setUpErrors(errors);
     if (Object.keys(errors).length > 0) return; // don't start submitting while required fields missing
@@ -457,7 +458,7 @@ export default function Admin() {
     // Always mark admin uploads as ready/published
     fd.append('ready', 'true');
     try {
-      setAdminSubmitting(true);
+  setAdminSubmitting(true);
       const res = await fetch(`${API_BASE}/api/admin/builds`, { method: 'POST', credentials: 'include', body: fd });
       if (!res.ok) throw new Error('Upload failed');
       // try to parse returned build id and mark ready if server didn't via 'ready' flag
@@ -478,7 +479,7 @@ export default function Admin() {
           console.warn('Preview upload after create failed', e);
         }
       }
-  setUpName(''); setUpDesc(''); setAdCategories([]); setUpGlb(null); setUpMc(null); setUpHoloprint(null); setUpMaterials([]); setUpMatError('');
+      setUpName(''); setUpDesc(''); setAdCategories([]); setUpGlb(null); setUpMc(null); setUpHoloprint(null); setUpMaterials([]); setUpMatError('');
       if (upPreviewUrl) {
         try { URL.revokeObjectURL(upPreviewUrl); } catch (e) {}
       }
@@ -492,14 +493,40 @@ export default function Admin() {
     }
   };
 
+  const handleAdminGeneratePreview = async () => {
+    if (!adViewerRef.current || typeof adViewerRef.current.capture !== 'function') {
+      alert('Viewer not ready');
+      return;
+    }
+    setUpPreviewGenerating(true);
+    try {
+      const blob = await adViewerRef.current.capture({ quality: 1.0, scale: 2 });
+      if (!blob) throw new Error('Capture failed');
+      const newUrl = URL.createObjectURL(blob);
+      try {
+        if (upPreviewUrl) URL.revokeObjectURL(upPreviewUrl);
+      } catch (_) {}
+      setUpPreviewFile(blob);
+      setUpPreviewUrl(newUrl);
+    } catch (err) {
+      console.error('Preview capture failed', err);
+      alert('Could not generate preview');
+    } finally {
+      setUpPreviewGenerating(false);
+    }
+  };
+
   // Preview URL for selected admin .glb file
   const [adGlbPreviewUrl, setAdGlbPreviewUrl] = useState(null);
   const adViewerRef = useRef(null);
   const [upPreviewFile, setUpPreviewFile] = useState(null);
   const [upPreviewUrl, setUpPreviewUrl] = useState(null);
+  const [upPreviewGenerating, setUpPreviewGenerating] = useState(false);
+
   useEffect(() => {
     if (!upGlb) {
       setAdGlbPreviewUrl(null);
+      adViewerRef.current = null;
       return;
     }
     const url = URL.createObjectURL(upGlb);
@@ -507,8 +534,17 @@ export default function Admin() {
     return () => {
       try { URL.revokeObjectURL(url); } catch (e) {}
       setAdGlbPreviewUrl(null);
+      adViewerRef.current = null;
     };
   }, [upGlb]);
+
+  useEffect(() => {
+    return () => {
+      if (upPreviewUrl) {
+        try { URL.revokeObjectURL(upPreviewUrl); } catch (_) {}
+      }
+    };
+  }, [upPreviewUrl]);
 
   // Fetch aliases for consistent preview formatting (same as Upload page)
   useEffect(() => {
@@ -787,34 +823,36 @@ export default function Admin() {
               <input className={`input-file ${upSubmitted && upErrors.glb ? 'input-error' : ''}`} type="file" accept=".glb,.GLB" onChange={(e)=>setUpGlb(e.target.files?.[0]||null)} />
               {upSubmitted && upErrors.glb && <div className="error-text">{upErrors.glb}</div>}
               {upGlb && <div className="file-meta">{upGlb.name} • {(upGlb.size/1024/1024).toFixed(2)} MB</div>}
-              {/* Inline preview of the selected .glb file for admins */}
-              {adGlbPreviewUrl && (
-                <div className="glb-preview" style={{ marginTop: 12 }}>
-                  <ModelViewer url={adGlbPreviewUrl} fitMargin={1.0} background={'var(--viewer-bg)'} ref={(el)=>{ if (el) adViewerRef.current = el; }} />
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                    <button className="btn" type="button" onClick={async ()=>{
-                      if (!adViewerRef.current || !adViewerRef.current.capture) return;
-                      try {
-                        const blob = await adViewerRef.current.capture({ quality: 1.0, scale: 2 });
-                        setUpPreviewFile(blob);
-                        const url = URL.createObjectURL(blob);
-                        setUpPreviewUrl(url);
-                      } catch (e) { console.error('Capture failed', e); alert('Capture failed'); }
-                    }}>Capture preview</button>
-                    <label className="btn" style={{ position: 'relative', overflow: 'hidden' }}>
-                      <input type="file" accept="image/*" style={{ position:'absolute', inset:0, opacity:0, cursor:'pointer' }} onChange={(e)=>{
-                        const f = e.target.files?.[0]; if (!f) return; setUpPreviewFile(f); const url = URL.createObjectURL(f); setUpPreviewUrl(url);
-                      }} />
-                      Upload preview image
-                    </label>
+              <div style={{ marginTop: 8 }}>
+                <div style={{ display: 'flex', gap: 12, width: '100%', maxWidth: 920, height: 280, minHeight: 280, maxHeight: 280, boxSizing: 'border-box', overflow: 'hidden' }}>
+                  <div style={{ flex: 1, minWidth: 0, minHeight: 0, height: '100%', borderRadius: 8, overflow: 'hidden', border: '1px solid var(--border)', display: 'flex' }}>
+                    {adGlbPreviewUrl ? (
+                      <ModelViewer url={adGlbPreviewUrl} fitMargin={4.0} background={'var(--viewer-bg)'} ref={(el)=>{ adViewerRef.current = el || null; }} style={{ width: '100%', height: '100%' }} />
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)' }}>No model selected</div>
+                    )}
                   </div>
-                  {upPreviewUrl && (
-                    <div style={{ marginTop: 8 }}>
-                      <img src={upPreviewUrl} alt="selected preview" style={{ width: '100%', height: 160, objectFit: 'cover', borderRadius: 6 }} />
+
+                  <div style={{ flex: 1, minWidth: 0, height: '100%', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                      {upPreviewUrl ? (
+                        <img src={upPreviewUrl} alt="Preview" style={{ display: 'block', width: '100%', height: '100%', objectFit: 'cover', borderRadius: 8, border: '1px solid var(--border)' }} />
+                      ) : (
+                        <div className="muted" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: 8, border: '1px dashed var(--border)' }}>No preview</div>
+                      )}
                     </div>
-                  )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                        <button type="button" className="btn" onClick={handleAdminGeneratePreview} disabled={upPreviewGenerating || !adGlbPreviewUrl}>{upPreviewGenerating ? 'Generating…' : 'Generate preview image'}</button>
+                      </div>
+                      <div style={{ fontSize: 12, color: 'var(--muted)' }}>{upPreviewUrl ? 'Unsaved' : ''}</div>
+                    </div>
+                    {upSubmitted && upErrors.preview && (
+                      <div className="error-text" style={{ marginTop: 8 }}>{upErrors.preview}</div>
+                    )}
+                  </div>
                 </div>
-              )}
+              </div>
             </div>
           </div>
 
@@ -890,7 +928,13 @@ export default function Admin() {
           {/* Admin uploads are published automatically; no publish checkbox needed */}
 
           <div className="field-row">
-            <button className="btn primary" type="submit" disabled={adminSubmitting} aria-busy={adminSubmitting}>
+            <button
+              className="btn primary"
+              type="submit"
+              disabled={adminSubmitting || !upPreviewFile}
+              aria-disabled={adminSubmitting || !upPreviewFile}
+              aria-busy={adminSubmitting}
+            >
               {adminSubmitting ? 'Submitting…' : 'Submit'}
             </button>
           </div>
