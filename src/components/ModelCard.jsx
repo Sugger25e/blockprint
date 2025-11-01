@@ -61,9 +61,7 @@ export default function ModelCard({ model, actionLabel, onAction, managePath, sh
             <span className="sr-only">Loading preview</span>
           </div>
         )}
-        {/* Always show the small stat capsule. While counts are null we treat that as loading and show '…'. */}
   <div className="model-like-badge">
-          {/* Likes */}
           <Tooltip content={likeCount != null ? `${likeCount} likes` : '… likes'} delay={80} followCursor={false}>
             <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
               <i className="fa-solid fa-heart" style={{ color: '#ef4444', fontSize: 13 }} aria-hidden="true"></i>
@@ -71,7 +69,6 @@ export default function ModelCard({ model, actionLabel, onAction, managePath, sh
             </span>
           </Tooltip>
 
-          {/* Downloads */}
           <Tooltip content={downloadCount != null ? `${downloadCount} downloads` : '… downloads'} delay={80} followCursor={false}>
             <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
               <i className="fa-solid fa-download" style={{ color: 'var(--success)', fontSize: 13 }} aria-hidden="true"></i>
@@ -87,13 +84,10 @@ export default function ModelCard({ model, actionLabel, onAction, managePath, sh
             <div className="model-card-title" title={name} style={{ flex: 1 }}>{name}</div>
             {statusLabel && <div style={{ fontSize: 12, color: 'var(--muted)', whiteSpace: 'nowrap' }}>{statusLabel}</div>}
           </div>
-          {/* Show creation / publish date (muted) when provided */}
           {createdAt && (
             <div className="muted" style={{ fontSize: 12, marginTop: 6 }}>{new Date(createdAt).toLocaleString()}</div>
           )}
-          {/* Optionally show author if requested (profile favorites) */}
           {showAuthor && (() => {
-            // Determine author name from common shapes
             const credits = model?.credits;
             let authorName = null;
             if (typeof credits === 'string') authorName = credits;
@@ -106,7 +100,6 @@ export default function ModelCard({ model, actionLabel, onAction, managePath, sh
               </div>
             );
           })()}
-          {/* author removed per design: don't show author on cards */}
           {description && <div className="model-card-desc" title={description}>{description}</div>}
           {Array.isArray(categories) && categories.length > 0 && (
             <div className="tags">
@@ -124,10 +117,6 @@ export default function ModelCard({ model, actionLabel, onAction, managePath, sh
             {actionLabel || 'Action'}
           </button>
         ) : (
-          // When showStatus is enabled, follow explicit rules:
-          // - Pending => only show Manage
-          // - Approved => show View + Manage
-          // - Rejected => show nothing
           showStatus ? (() => {
             if (!statusLabel) return null;
             if (statusLabel === 'Rejected') return null;

@@ -129,10 +129,9 @@ export default function User() {
   const start = (current - 1) * PER_PAGE;
   const pageItems = byAuthor.slice(start, start + PER_PAGE);
 
-  // If models finished loading and this author has no builds, treat as 404 and render full NotFound page
-  if (!modelsLoading && decoded && byAuthor.length === 0) {
-    return <NotFound />;
-  }
+  // Previously we treated "no builds" as a 404. That caused valid user pages with no uploads
+  // to incorrectly show NotFound. Instead, render the profile header and show an empty state
+  // when there are no builds for the author.
 
   return (
     <div className="page user-page">
@@ -188,8 +187,10 @@ export default function User() {
           ))}
         </div>
       ) : byAuthor.length === 0 ? (
-        // No builds for this author after models finished loading -> show 404
-        <NotFound />
+        // No builds for this author after models finished loading -> show an empty state
+        <div className="empty">
+          <p>This user has not uploaded any builds yet.</p>
+        </div>
       ) : (
         <>
           <div className="grid fade-in">

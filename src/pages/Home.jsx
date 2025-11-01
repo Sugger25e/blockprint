@@ -112,17 +112,13 @@ export default function Home() {
           setSelectedCat(decodeURIComponent(paramCategory));
           setNotFoundCategory(false);
         } else {
-          // If models still loading, wait; otherwise mark as not found
           if (!modelsLoading) setNotFoundCategory(true);
-          // keep selectedCat unchanged while loading
         }
       }
     }
-    // If page param exists, use it; otherwise keep page 1 (don't rewrite '/')
     setPage(paramPage);
   }, [paramCategory, paramPage, allCategories]);
 
-  // If category is invalid and models finished loading, render full 404 (hide header/filter)
   if (!modelsLoading && notFoundCategory) {
     return <NotFound />;
   }

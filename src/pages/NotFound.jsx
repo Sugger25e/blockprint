@@ -13,7 +13,9 @@ export default function NotFound() {
       </div>
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '24px' }}>
         <div>
-          <div style={{ fontSize: 48, marginBottom: 12 }}>😵‍💫</div>
+          <div style={{ marginBottom: 12 }}>
+            <img src="/404.png" alt="dizzy face" style={{ width: 96, height: 96, objectFit: 'contain' }} />
+          </div>
           <h3 style={{ margin: '0 0 8px' }}>Page not found</h3>
           <p className="muted" style={{ maxWidth: 560, margin: '0 auto' }}>
             The page you’re looking for doesn’t exist or may have been moved. Try going back or visiting the Discover page.
