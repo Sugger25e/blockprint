@@ -919,7 +919,7 @@ export default function Admin() {
                   {builds.map((m) => (
                     <div key={m.buildId || m.id}>
                       {/* Reuse ModelCard with a custom action that goes to the edit/manage page */}
-                      <ModelCard model={m} actionLabel="Manage" onAction={(mdl) => navigate(`/profile/${encodeURIComponent(user?.discordId || '')}/manage/${encodeURIComponent(mdl.numericId || mdl.id || mdl.buildId)}`)} />
+                      <ModelCard model={m} showAuthor actionLabel="Manage" onAction={(mdl) => navigate(`/profile/${encodeURIComponent(user?.discordId || '')}/manage/${encodeURIComponent(mdl.numericId || mdl.id || mdl.buildId)}`)} />
                     </div>
                   ))}
             </div>
