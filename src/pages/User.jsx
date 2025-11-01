@@ -1,8 +1,10 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import Tooltip from '../components/Tooltip';
 import { useAuth } from '../context/AuthContext';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useModels } from '../context/ModelsContext';
 import ModelCard from '../components/ModelCard';
+import NotFound from './NotFound';
 import { getBuildStats } from '../utils/modelActions';
 
 export default function User() {
@@ -61,13 +63,25 @@ export default function User() {
   const [likesTotal, setLikesTotal] = useState(null);
   const [favsTotal, setFavsTotal] = useState(null);
   const [downloadsTotal, setDownloadsTotal] = useState(null);
+  const [statsLoading, setStatsLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
+    // If models are still loading, don't decide counts yet — keep showing loading state
+    if (modelsLoading) {
+      setStatsLoading(true);
+      return () => { cancelled = true; };
+    }
+    setStatsLoading(true);
     (async () => {
       if (!byAuthor || byAuthor.length === 0) {
-        setLikesTotal(0);
-        setFavsTotal(0);
+        // Models finished loading and author has no builds: show explicit zeros
+        if (!cancelled) {
+          setLikesTotal(0);
+          setFavsTotal(0);
+          setDownloadsTotal(0);
+          setStatsLoading(false);
+        }
         return;
       }
       try {
@@ -91,9 +105,15 @@ export default function User() {
           setLikesTotal(likes);
           setFavsTotal(favs);
           setDownloadsTotal(downloads);
+          setStatsLoading(false);
         }
       } catch (_) {
-        if (!cancelled) { setLikesTotal(0); setFavsTotal(0); setDownloadsTotal(0); }
+        if (!cancelled) {
+          setLikesTotal(0);
+          setFavsTotal(0);
+          setDownloadsTotal(0);
+          setStatsLoading(false);
+        }
       }
     })();
     return () => { cancelled = true; };
@@ -109,6 +129,11 @@ export default function User() {
   const start = (current - 1) * PER_PAGE;
   const pageItems = byAuthor.slice(start, start + PER_PAGE);
 
+  // If models finished loading and this author has no builds, treat as 404 and render full NotFound page
+  if (!modelsLoading && decoded && byAuthor.length === 0) {
+    return <NotFound />;
+  }
+
   return (
     <div className="page user-page">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -120,9 +145,35 @@ export default function User() {
           )}
           <div>
             <h1 style={{ margin: 0 }}>{decoded || 'Unknown author'}</h1>
-            <div className="muted" style={{ marginTop: 6 }}>
-              {total} {total === 1 ? 'build' : 'builds'} • {likesTotal != null ? `${likesTotal} likes` : '… likes'} • {favsTotal != null ? `${favsTotal} favorites` : '… favorites'} • {downloadsTotal != null ? `${downloadsTotal} downloads` : '… downloads'}
-            </div>
+              <div className="muted" style={{ marginTop: 6, display: 'flex', gap: 12, alignItems: 'center', fontSize: 14 }}>
+                <Tooltip content={statsLoading ? '…' : `${total} ${total === 1 ? 'build' : 'builds'}`} delay={80} followCursor={false}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <i className="fa-solid fa-cubes" aria-hidden="true" style={{ color: 'var(--accent)', fontSize: 14 }}></i>
+                    <span>{statsLoading ? '…' : total}</span>
+                  </span>
+                </Tooltip>
+
+                <Tooltip content={statsLoading ? '… likes' : `${likesTotal} likes`} delay={80} followCursor={false}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <i className="fa-solid fa-heart" aria-hidden="true" style={{ color: '#ef4444', fontSize: 14 }}></i>
+                    <span>{statsLoading ? '…' : likesTotal}</span>
+                  </span>
+                </Tooltip>
+
+                <Tooltip content={statsLoading ? '… favorites' : `${favsTotal} favorites`} delay={80} followCursor={false}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <i className="fa-solid fa-star" aria-hidden="true" style={{ color: '#fbbf24', fontSize: 14 }}></i>
+                    <span>{statsLoading ? '…' : favsTotal}</span>
+                  </span>
+                </Tooltip>
+
+                <Tooltip content={statsLoading ? '… downloads' : `${downloadsTotal} downloads`} delay={80} followCursor={false}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                    <i className="fa-solid fa-download" aria-hidden="true" style={{ color: 'var(--success)', fontSize: 14 }}></i>
+                    <span>{statsLoading ? '…' : downloadsTotal}</span>
+                  </span>
+                </Tooltip>
+              </div>
           </div>
         </div>
       </div>
@@ -137,9 +188,8 @@ export default function User() {
           ))}
         </div>
       ) : byAuthor.length === 0 ? (
-        <div className="empty">
-          <p className="muted">No builds found for this author.</p>
-        </div>
+        // No builds for this author after models finished loading -> show 404
+        <NotFound />
       ) : (
         <>
           <div className="grid fade-in">

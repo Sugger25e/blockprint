@@ -671,7 +671,7 @@ export default function ModelDetail() {
           )}
           {typeof downloadCount === 'number' && (
             <span title={`${downloadCount} downloads`} style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-              <i className="fa-solid fa-download" style={{ color: 'var(--muted)', fontSize: 13 }} aria-hidden="true"></i>
+              <i className="fa-solid fa-download" style={{ color: 'var(--success)', fontSize: 13 }} aria-hidden="true"></i>
               <span style={{ fontSize: 13 }}>{downloadCount}</span>
             </span>
           )}

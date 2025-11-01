@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useModels } from '../context/ModelsContext';
 import ModelCard from '../components/ModelCard';
 import CategoryPicker from '../components/CategoryPicker';
+import NotFound from './NotFound';
 import { useGLTF } from '@react-three/drei';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 
@@ -16,6 +17,7 @@ export default function Home() {
   const paramCategory = params.category || null;
   const paramPage = Number(params.page || 1) || 1;
   const [page, setPage] = useState(paramPage);
+  const [notFoundCategory, setNotFoundCategory] = useState(false);
   // Meta tags for Home
   useEffect(() => {
     const title = 'Discover — Blockprint';
@@ -45,9 +47,30 @@ export default function Home() {
   }, [models]);
 
   const filtered = useMemo(() => {
-    if (selectedCat === 'All') return models;
-    return models.filter(m => Array.isArray(m.categories) && m.categories.includes(selectedCat));
+    if (!selectedCat || selectedCat === 'All') return models;
+    // Compare categories case-insensitively so URL casing doesn't break filtering
+    const wanted = String(selectedCat).toLowerCase();
+    return models.filter(m => Array.isArray(m.categories) && m.categories.some(c => String(c).toLowerCase() === wanted));
   }, [models, selectedCat]);
+
+  // Detect out-of-range page param after models/filtering are ready and show 404
+  useEffect(() => {
+    // Don't decide while models are loading
+    if (modelsLoading) return;
+
+    // Use the filtered results (selectedCat will be 'All' for /all routes or root)
+    const total = filtered.length;
+    const pages = Math.max(1, Math.ceil(total / PER_PAGE));
+
+    // If page param is not a valid positive integer or greater than available pages -> 404
+    if (!Number.isFinite(paramPage) || paramPage < 1 || paramPage > pages) {
+      setNotFoundCategory(true);
+    } else {
+      setNotFoundCategory(false);
+      // also ensure internal page state matches a clamped value when valid
+      setPage(Math.min(Math.max(1, paramPage || 1), pages));
+    }
+  }, [paramCategory, paramPage, filtered, modelsLoading]);
 
   const onChangeCategory = (value) => {
     // Do not trigger skeleton on category change; just switch filter
@@ -69,16 +92,40 @@ export default function Home() {
 
   // Sync selected category & page from URL params when route changes
   useEffect(() => {
+    // If no category param, reset to All and clear notFound flag
+    if (!paramCategory) {
+      setSelectedCat('All');
+      setNotFoundCategory(false);
+      setPage(paramPage);
+      return;
+    }
+
     // If params contain a category and page, apply them
     if (paramCategory) {
-      const cat = paramCategory === 'all'
-        ? 'All'
-        : (allCategories.find(c => String(c).toLowerCase() === paramCategory) || decodeURIComponent(paramCategory));
-      setSelectedCat(cat);
+      if (paramCategory === 'all') {
+        setSelectedCat('All');
+        setNotFoundCategory(false);
+      } else {
+        const found = allCategories.find(c => String(c).toLowerCase() === paramCategory);
+        if (found) {
+          // Preserve the raw category string from the URL so the UI shows what the path contains
+          setSelectedCat(decodeURIComponent(paramCategory));
+          setNotFoundCategory(false);
+        } else {
+          // If models still loading, wait; otherwise mark as not found
+          if (!modelsLoading) setNotFoundCategory(true);
+          // keep selectedCat unchanged while loading
+        }
+      }
     }
     // If page param exists, use it; otherwise keep page 1 (don't rewrite '/')
     setPage(paramPage);
   }, [paramCategory, paramPage, allCategories]);
+
+  // If category is invalid and models finished loading, render full 404 (hide header/filter)
+  if (!modelsLoading && notFoundCategory) {
+    return <NotFound />;
+  }
 
   // pagination derived values
   const total = filtered.length;
@@ -117,6 +164,8 @@ export default function Home() {
             </div>
           ))}
         </div>
+      ) : notFoundCategory ? (
+        <NotFound />
       ) : filtered.length === 0 ? (
         <div className="empty">
           {models.length === 0 ? (

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import useReloadableNavigate from '../utils/useReloadableNavigate';
+import Tooltip from './Tooltip';
 import { getBuildStats } from '../utils/modelActions';
 
 export default function ModelCard({ model, actionLabel, onAction, managePath, showStatus, createdAt, viewFromProfile, showAuthor }) {
@@ -60,22 +61,24 @@ export default function ModelCard({ model, actionLabel, onAction, managePath, sh
             <span className="sr-only">Loading preview</span>
           </div>
         )}
-        {(typeof likeCount === 'number' || typeof downloadCount === 'number') && (
-          <div className="model-like-badge" title={`${likeCount || 0} likes · ${downloadCount || 0} downloads`}>
-            {typeof likeCount === 'number' && (
-              <>
-                <i className="fa-solid fa-heart" style={{ color: '#ef4444', fontSize: 13 }} aria-hidden="true"></i>
-                <span style={{ fontSize: 13 }}>{likeCount}</span>
-              </>
-            )}
-            {typeof downloadCount === 'number' && (
-              <>
-                <i className="fa-solid fa-download" style={{ color: 'var(--muted)', fontSize: 13 }} aria-hidden="true"></i>
-                <span style={{ fontSize: 13 }}>{downloadCount}</span>
-              </>
-            )}
-          </div>
-        )}
+        {/* Always show the small stat capsule. While counts are null we treat that as loading and show '…'. */}
+  <div className="model-like-badge">
+          {/* Likes */}
+          <Tooltip content={likeCount != null ? `${likeCount} likes` : '… likes'} delay={80} followCursor={false}>
+            <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+              <i className="fa-solid fa-heart" style={{ color: '#ef4444', fontSize: 13 }} aria-hidden="true"></i>
+              <span style={{ fontSize: 13 }}>{likeCount != null ? likeCount : '…'}</span>
+            </span>
+          </Tooltip>
+
+          {/* Downloads */}
+          <Tooltip content={downloadCount != null ? `${downloadCount} downloads` : '… downloads'} delay={80} followCursor={false}>
+            <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+              <i className="fa-solid fa-download" style={{ color: 'var(--success)', fontSize: 13 }} aria-hidden="true"></i>
+              <span style={{ fontSize: 13 }}>{downloadCount != null ? downloadCount : '…'}</span>
+            </span>
+          </Tooltip>
+        </div>
       </div>
 
       <div className="model-card-info">

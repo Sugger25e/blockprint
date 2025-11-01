@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import useReloadableNavigate from '../utils/useReloadableNavigate';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
+import Tooltip from './Tooltip';
 
 export default function Navbar() {
   const { theme, toggle } = useTheme();
@@ -71,13 +72,15 @@ export default function Navbar() {
               <div className="skeleton" style={{ width: 32, height: 32, borderRadius: '50%' }} />
             ) : user ? (
               <div className="user-menu">
-                <a href="/profile" className="avatar-link" title={user.username} aria-label="Profile" onClick={() => onAdminLeaveNavigate()}>
-                  {user.avatarUrl ? (
-                    <img src={user.avatarUrl} alt="Avatar" width={32} height={32} style={{ borderRadius: 999 }} />
-                  ) : (
-                    <span className="avatar-fallback" aria-hidden="true" style={{ width: 32, height: 32, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', borderRadius: 999, background: 'var(--muted)', color: 'white' }}>{(user.username || '?').charAt(0).toUpperCase()}</span>
-                  )}
-                </a>
+                <Tooltip content={user.username} delay={80} followCursor={false} position="bottom">
+                  <a href="/profile" className="avatar-link" aria-label="Profile" onClick={() => onAdminLeaveNavigate()}>
+                    {user.avatarUrl ? (
+                      <img src={user.avatarUrl} alt="Avatar" width={32} height={32} style={{ borderRadius: 999 }} />
+                    ) : (
+                      <span className="avatar-initial-primary" aria-hidden="true" style={{ width: 32, height: 32, fontSize: 13, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>{(user.username || '?').charAt(0).toUpperCase()}</span>
+                    )}
+                  </a>
+                </Tooltip>
               </div>
             ) : (
               /* show a rounded-rectangle login button with discord icon + text */

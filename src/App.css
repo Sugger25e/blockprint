@@ -5,6 +5,7 @@
   --text: #0f1115;
   --muted: #6b7280;
   --accent: #3b82f6;
+  --success: #16a34a;
   /* Slightly darker border on light theme so it remains visible against very light backgrounds */
   --border: #d1d5db;
   --viewer-bg: #f4f4f4;
@@ -217,6 +218,55 @@ body, .navbar, .model-card, .detail-viewer, .mobile-menu, .btn, .page, .detail, 
 .viewer-controls .icon-heart.active { color: #ef4444; filter: drop-shadow(0 6px 18px rgba(239,68,68,0.12)); }
 .viewer-controls .icon-star { color: inherit; }
 .viewer-controls .icon-star.active { color: #f59e0b; filter: drop-shadow(0 6px 18px rgba(245,158,11,0.12)); }
+
+/* Tooltip styles for stat icons and general use */
+.tooltip-box {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  transform: translateX(-50%) translateY(6px);
+  opacity: 0;
+  pointer-events: none;
+  transition: transform 180ms cubic-bezier(.2,.9,.2,1), opacity 180ms ease;
+  background: var(--card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+  white-space: nowrap;
+  z-index: 60;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+  left: 50%;
+}
+.tooltip-box.visible { transform: translateX(-50%) translateY(0); opacity: 1; pointer-events: auto; }
+.tooltip-box .tooltip-content { display: block; }
+
+.tooltip-box .tooltip-arrow {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: -6px;
+  width: 10px;
+  height: 8px;
+  clip-path: polygon(50% 0, 0 100%, 100% 100%);
+  background: var(--card);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Slight variation for dark theme so arrow doesn't show a border artifact */
+[data-theme="dark"] .tooltip-box .tooltip-arrow { border-left: none; border-right: none; border-bottom: none; }
+
+/* Position variant: show tooltip below the target */
+.tooltip-box.position-bottom { bottom: auto; top: calc(100% + 8px); transform: translateX(-50%) translateY(-6px); }
+.tooltip-box.position-bottom.visible { transform: translateX(-50%) translateY(0); }
+.tooltip-box.position-bottom .tooltip-arrow { top: -6px; bottom: auto; transform: translateX(-50%) rotate(180deg); }
+[data-theme="dark"] .tooltip-box.position-bottom .tooltip-arrow { /* remove extra borders in dark theme */ border-left: none; border-right: none; border-top: none; }
+
+/* Target that contains the tooltip - allow smooth transform on hover */
+.tooltip-target { display: inline-block; }
+
 
 /* small pop animation when interacting */
 /* smoother pop / bounce animation: quick grow then subtle settle */

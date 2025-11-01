@@ -29,7 +29,7 @@ export default function CategoryPicker({ categories = [], value = 'All', onChang
   return (
     <div className="cat-picker" ref={wrapRef}>
       <button type="button" className={`cat-button ${open ? 'open' : ''}`} onClick={() => setOpen(o => !o)} aria-haspopup="listbox" aria-expanded={open}>
-        <span className="cat-current">{value}</span>
+        <span className="cat-current">{value ? String(value).charAt(0).toUpperCase() + String(value).slice(1) : value}</span>
         <span className="cat-caret" aria-hidden="true">▾</span>
       </button>
       {open && (
@@ -51,13 +51,13 @@ export default function CategoryPicker({ categories = [], value = 'All', onChang
               <button
                 key={c}
                 type="button"
-                className={`cat-option ${c === value ? 'selected' : ''}`}
+                className={`cat-option ${String(c).toLowerCase() === String(value).toLowerCase() ? 'selected' : ''}`}
                 onClick={() => select(c)}
                 role="option"
-                aria-selected={c === value}
+                aria-selected={String(c).toLowerCase() === String(value).toLowerCase()}
               >
-                <span className="cat-option-label">{c}</span>
-                {c === value && <i className="fa-solid fa-check cat-check" aria-hidden="true"></i>}
+                <span className="cat-option-label">{c ? String(c).charAt(0).toUpperCase() + String(c).slice(1) : c}</span>
+                {String(c).toLowerCase() === String(value).toLowerCase() && <i className="fa-solid fa-check cat-check" aria-hidden="true"></i>}
               </button>
             ))}
           </div>

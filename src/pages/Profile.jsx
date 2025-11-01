@@ -5,6 +5,7 @@ import useReloadableNavigate from '../utils/useReloadableNavigate';
 import { getMyFavorites, getMyLikes, getBuildStats } from '../utils/modelActions';
 import { useConfirm, useToast } from '../context/UiContext';
 import ModelCard from '../components/ModelCard';
+import Tooltip from '../components/Tooltip';
 
 export default function Profile() {
   const { user, loading, login, logout } = useAuth();
@@ -161,20 +162,73 @@ export default function Profile() {
     <div className="page">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {user.avatarUrl && <img src={user.avatarUrl} alt="Avatar" width={40} height={40} style={{ borderRadius: '50%' }} />}
+          {user.avatarUrl ? (
+            <img src={user.avatarUrl} alt="Avatar" width={40} height={40} style={{ borderRadius: '50%' }} />
+          ) : (
+            <span className="avatar-initial-primary" style={{ width: 40, height: 40, fontSize: 14, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }} aria-hidden="true">{(user.username || '?').charAt(0).toUpperCase()}</span>
+          )}
           <div>
-            <h2 style={{ margin: 0 }}>My submissions</h2>
-            <div className="muted" style={{ fontSize: 14 }}>Signed in as {user.username}</div>
+            <h2 style={{ margin: 0 }}>{user.username}</h2>
+            {/* Counters row (builds, likes, favorites, downloads) */}
+            {(() => {
+              const statsLoading = dataLoading || likesLoading || downloadsLoading;
+              const buildsCount = myBuilds ? myBuilds.length : 0;
+              const likes = likesCount != null ? likesCount : 0;
+              const favs = favorites ? favorites.length : 0;
+              const downloads = downloadsTotal != null ? downloadsTotal : 0;
+              return (
+                <div className="muted" style={{ marginTop: 6, display: 'flex', gap: 12, alignItems: 'center', fontSize: 14 }}>
+                  <Tooltip content={statsLoading ? '…' : `${buildsCount} ${buildsCount === 1 ? 'build' : 'builds'}`} delay={80} followCursor={false}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <i className="fa-solid fa-cubes" aria-hidden="true" style={{ color: 'var(--accent)', fontSize: 14 }}></i>
+                      <span>{statsLoading ? '…' : buildsCount}</span>
+                    </span>
+                  </Tooltip>
+
+                  <Tooltip content={statsLoading ? '… likes' : `${likes} likes`} delay={80} followCursor={false}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <i className="fa-solid fa-heart" aria-hidden="true" style={{ color: '#ef4444', fontSize: 14 }}></i>
+                      <span>{statsLoading ? '…' : likes}</span>
+                    </span>
+                  </Tooltip>
+
+                  <Tooltip content={statsLoading ? '… favorites' : `${favs} favorites`} delay={80} followCursor={false}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <i className="fa-solid fa-star" aria-hidden="true" style={{ color: '#fbbf24', fontSize: 14 }}></i>
+                      <span>{statsLoading ? '…' : favs}</span>
+                    </span>
+                  </Tooltip>
+
+                  <Tooltip content={statsLoading ? '… downloads' : `${downloads} downloads`} delay={80} followCursor={false}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                      <i className="fa-solid fa-download" aria-hidden="true" style={{ color: 'var(--success)', fontSize: 14 }}></i>
+                      <span>{statsLoading ? '…' : downloads}</span>
+                    </span>
+                  </Tooltip>
+                </div>
+              );
+            })()}
           </div>
         </div>
-        <div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="btn" onClick={() => {
+            const handle = encodeURIComponent(user?.username || user?.discordId || user?.userId || user?.id || '');
+            if (handle) navigate(`/user/${handle}`);
+          }}>View public profile</button>
           <button className="btn" onClick={logout}>Logout</button>
         </div>
       </div>
 
           {/* Combined published builds and pending submissions */}
           {dataLoading ? (
-            <div className="panel"><p className="muted">Loading submissions…</p></div>
+            <div className="grid fade-in" aria-busy="true">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="model-card">
+                  <div className="model-card-viewer"><div className="skeleton skeleton-viewer" aria-hidden="true"></div></div>
+                  <div className="model-card-info"><div className="skeleton skeleton-line" style={{ width: '70%' }} aria-hidden="true"></div></div>
+                </div>
+              ))}
+            </div>
           ) : (
             (() => {
               // Normalize and combine both lists so pending items show alongside published builds
@@ -269,29 +323,7 @@ export default function Profile() {
         </div>
       )}
 
-      <div style={{ marginTop: 24 }}>
-        <h3>Your profile</h3>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 12 }}>
-          <div style={{ fontWeight: 600 }}>Liked models</div>
-          <div className="muted">{likesLoading ? '-' : likesCount}</div>
-          <div style={{ width: 12 }} />
-          <div style={{ fontWeight: 600 }}>Downloads</div>
-          <div className="muted">{downloadsLoading ? '-' : downloadsTotal}</div>
-        </div>
-
-        <div style={{ marginTop: 12 }}>
-          <h4>Your favorites</h4>
-              {favorites.length === 0 ? (
-            <p className="muted">You have no favorites yet.</p>
-          ) : (
-            <div className="grid" style={{ gap: 12 }}>
-              {favorites.map(m => (
-                <ModelCard key={m.id} model={m} showAuthor />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Removed the previous "Your profile" section; favorites and personal stats are shown above */}
     </div>
   );
 }
