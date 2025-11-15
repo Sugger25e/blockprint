@@ -1154,7 +1154,7 @@ export default function ModelDetail() {
           <div className="dimensions" style={{ marginTop: 8 }}>
             <h3 style={{ margin: '0 0 6px' }}>Dimensions</h3>
             <div className="muted">
-              {dimsLoading ? 'Detecting dimensions…' : dimensions ? `${dimensions.length} × ${dimensions.width} × ${dimensions.height} blocks` : 'Not available'}
+              {dimsLoading ? 'Detecting dimensions…' : dimensions ? `${dimensions.length} × ${dimensions.width} × ${dimensions.height} (LWH)` : 'Not available'}
             </div>
           </div>
 
