@@ -27,6 +27,26 @@ const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
 function App() {
   useEffect(() => {
     const today = new Date().toDateString();
+    const todayTime = new Date().getTime();
+
+    // Clean up old visited keys from localStorage
+    const keys = Object.keys(localStorage);
+    keys.forEach(key => {
+      if (key.startsWith('visited_')) {
+        try {
+          const visitedDate = new Date(key.replace('visited_', ''));
+          const visitedTime = visitedDate.getTime();
+          // Remove keys older than today (more than 24 hours ago to be safe)
+          if (todayTime - visitedTime > 24 * 60 * 60 * 1000) {
+            localStorage.removeItem(key);
+          }
+        } catch (e) {
+          // If date parsing fails, remove the key anyway
+          localStorage.removeItem(key);
+        }
+      }
+    });
+
     if (localStorage.getItem('visited_' + today) !== 'true') {
       fetch(`${API_BASE}/api/track-visit`, { method: 'POST' }).then(() => {
         localStorage.setItem('visited_' + today, 'true');
