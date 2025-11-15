@@ -329,14 +329,14 @@ export default function ModelDetail() {
         const res = await fetch(structUrl, { cache: 'no-store' });
         if (!res.ok) return;
         const ab = await res.arrayBuffer();
-        // dynamic import the same NBT parser used in Upload.jsx
-        const NBT = await import("https://esm.sh/nbtify-readonly-typeless@1.1.2?keep-names");
+        // Import the NBT parser locally
+        const { read } = await import('nbtify');
         let nbtRaw;
         try {
-          const r = await NBT.read(ab, { endian: 'little', strict: false });
+          const r = await read(ab, { endian: 'little', strict: false });
           nbtRaw = r?.data || r;
         } catch (e) {
-          const r2 = await NBT.read(ab);
+          const r2 = await read(ab);
           nbtRaw = r2?.data || r2;
         }
         if (cancelled) return;
