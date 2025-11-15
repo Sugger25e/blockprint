@@ -177,7 +177,7 @@ function ModelViewerImpl({ url, style, allowZoom = true, background = 'var(--vie
   }), []);
 
   return (
-  <div style={{ position: 'relative', width: '100%', height: '100%', background, boxSizing: 'border-box', ...style }}>
+  <div className="model-viewer-root" style={{ position: 'relative', width: '100%', height: '100%', background, boxSizing: 'border-box', ...style }}>
       <Canvas
         key={viewerKey}
         camera={{ fov: 45, near: 0.1, far: 2000 }}

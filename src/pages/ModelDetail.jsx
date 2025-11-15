@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useModels } from '../context/ModelsContext';
 import ModelViewer from '../components/ModelViewer';
@@ -70,6 +70,17 @@ export default function ModelDetail() {
   const model = models.find((m) => Number(m.id) === idNum);
   const [ogImage, setOgImage] = useState(null);
   const [materialsExpanded, setMaterialsExpanded] = useState(false);
+  const [mobileMaterialsOpen, setMobileMaterialsOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth <= 900 : false);
+
+  useEffect(() => {
+    function onResize() {
+      try { setIsMobile(window.innerWidth <= 900); } catch (e) {}
+    }
+    onResize();
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
   const [ambientIntensity, setAmbientIntensity] = useState(4.5);
   const [infoOpen, setInfoOpen] = useState(false);
   const infoRef = useRef(null);
@@ -171,6 +182,32 @@ export default function ModelDetail() {
       el.style.height = (el.scrollHeight) + 'px';
     }
   }, [editingText, editingId]);
+
+  // Preload all material icons (including hidden ones) so the modal or expanded list
+  // shows icons immediately instead of loading them only when the modal mounts.
+  // This hook must run unconditionally (not after an early return) to satisfy
+  // React Hooks rules. It uses optional chaining so it is safe if `model` is
+  // not yet available.
+  const materials = useMemo(() => Array.isArray(model?.materials) ? model.materials : [], [model?.materials]);
+  useEffect(() => {
+    if (!materials || materials.length === 0) return;
+    try {
+      materials.forEach((m) => {
+        const icon = typeof m.icon === 'string' ? m.icon : '';
+        let iconUrl = icon || '';
+        if (iconUrl && iconUrl.startsWith('minecraft:')) {
+          const id = iconUrl.split(':')[1];
+          iconUrl = `https://mc.nerothe.com/img/1.21.8/minecraft_${id}.png`;
+        }
+        if (iconUrl) {
+          const img = new Image();
+          img.src = iconUrl;
+        }
+      });
+    } catch (e) {
+      // ignore preload failures
+    }
+  }, [materials]);
 
   function autoResizeTextarea(el) {
     if (!el) return;
@@ -284,13 +321,16 @@ export default function ModelDetail() {
     (async () => {
       try {
         const structUrl = model?.details?.structureUrl || model?.details?.mcstructureUrl || null;
-        if (!structUrl) return;
+        if (!structUrl) {
+          setDimensions({ length: 'No file', width: 'No file', height: 'No file' });
+          return;
+        }
         setDimsLoading(true);
         const res = await fetch(structUrl, { cache: 'no-store' });
         if (!res.ok) return;
         const ab = await res.arrayBuffer();
         // dynamic import the same NBT parser used in Upload.jsx
-        const NBT = await (0)('import("https://esm.sh/nbtify-readonly-typeless@1.1.2?keep-names")');
+        const NBT = await import("https://esm.sh/nbtify-readonly-typeless@1.1.2?keep-names");
         let nbtRaw;
         try {
           const r = await NBT.read(ab, { endian: 'little', strict: false });
@@ -380,9 +420,12 @@ export default function ModelDetail() {
         };
         const root = getRoot(nbtRaw);
         const dims = computeDimensions(root || {});
+        console.log(root)
         if (!cancelled) setDimensions(dims);
       } catch (e) {
-        // ignore parse errors
+        console.error('Failed to load or parse .mcstructure for dimensions:', e);
+        // If fetch or parsing fails, set to error state so it shows "Error" instead of "Not available"
+        if (!cancelled) setDimensions({ length: 'Error', width: 'Error', height: 'Error' });
       } finally {
         if (!cancelled) setDimsLoading(false);
       }
@@ -624,6 +667,7 @@ export default function ModelDetail() {
               <div className="detail-viewer" style={{ borderRadius: 12, overflow: 'hidden' }}>
                 <div className="skeleton skeleton-viewer" style={{ height: '70vh' }} aria-hidden="true" />
               </div>
+          
               <div style={{ marginTop: 12 }}>
                 <div className="skeleton skeleton-line" style={{ width: '60%' }} aria-hidden="true" />
                 <div className="skeleton skeleton-line" style={{ width: '80%', marginTop: 8 }} aria-hidden="true" />
@@ -665,7 +709,7 @@ export default function ModelDetail() {
     );
   }
 
-  const materials = Array.isArray(model.materials) ? model.materials : [];
+  
   const showCollapse = materials.length > 8;
   const visibleMaterials = showCollapse && !materialsExpanded ? materials.slice(0, 8) : materials;
   const hiddenCount = materials.length - 8;
@@ -770,6 +814,38 @@ export default function ModelDetail() {
               <div style={{ minWidth: 48, textAlign: 'right', color: 'var(--muted)' }}>{ambientIntensity.toFixed(1)}</div>
             </div>
           </div>
+
+          {/* Mobile-only: replicate Published/Description/Tags here and hide the aside copy on mobile via CSS */}
+          <div className="mobile-meta">
+            {model.publishedAt && (
+              <div className="published muted" style={{ fontSize: 13, marginBottom: 8 }}>
+                Published {new Date(model.publishedAt).toLocaleDateString()}
+              </div>
+            )}
+
+            <div className="description" style={{ marginBottom: 8 }}>
+              <p className="detail-desc">{model.description || 'No description provided.'}</p>
+            </div>
+
+            {Array.isArray(model.categories) && model.categories.length > 0 && (
+              <div className="categories" style={{ marginTop: 8 }}>
+                <h3 style={{ margin: '0 0 6px' }}>Tags</h3>
+                <div className="tags">
+                  {model.categories.map((c, idx) => (
+                    <span className="tag" key={idx}>{c}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Dimensions (computed from .mcstructure when available) */}
+            <div style={{ marginTop: 8 }}>
+              <h3 style={{ margin: '0 0 6px' }}>Dimensions</h3>
+              <div className="muted">
+                {dimsLoading ? 'Detecting dimensions…' : dimensions ? `${dimensions.length} × ${dimensions.width} × ${dimensions.height} (LWH)` : 'Not available'}
+              </div>
+            </div>
+          </div>
       {/* Holoprint */}
       <div className="holoprint">
         <h3 className={`holoprint-title ${infoOpen ? 'is-open' : ''}`}>
@@ -847,6 +923,7 @@ export default function ModelDetail() {
                 </div>
 
                 {/* Comments: placed under credits (not in the aside) */}
+                {!isMobile && (
                 <div className="comments" style={{ marginTop: 14 }}>
                   <h3>Comments{commentDisplayCount > 0 ? ` (${commentDisplayCount})` : ''}</h3>
 
@@ -900,73 +977,7 @@ export default function ModelDetail() {
                             }} disabled={posting}>{posting ? 'Posting…' : 'Post comment'}</button>
                           </div>
 
-                          {/* Captcha modal dialog */}
-                          {showCaptchaDialog && (
-                            <div
-                              role="dialog"
-                              aria-modal="true"
-                              className="modal-backdrop"
-                              style={{ zIndex: 2200 }}
-                              onClick={() => {
-                                /* click outside cancels */
-                                setShowCaptchaDialog(false);
-                                try {
-                                  if (hcaptchaWidgetIdRef.current != null) {
-                                    window.hcaptcha.reset(hcaptchaWidgetIdRef.current);
-                                    hcaptchaWidgetIdRef.current = null;
-                                  }
-                                } catch (e) {}
-                              }}
-                            >
-                              <div className="modal confirm-pop captcha-modal" style={{ maxWidth: 540, width: '92%' }} onClick={(e) => e.stopPropagation()}>
-                                <div className="modal-head">Please verify you are human</div>
-                                <div className="muted" style={{ marginBottom: 12 }}>Complete the captcha below to confirm you're not a bot. This helps keep our community clean.</div>
-
-                                <div ref={modalHcaptchaContainerRef} className="hcaptcha-widget" style={{ marginBottom: 12 }} />
-
-                                <div className="modal-actions" style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
-                                  <button className="btn" onClick={() => {
-                                    setShowCaptchaDialog(false);
-                                    try {
-                                      if (hcaptchaWidgetIdRef.current != null) {
-                                        window.hcaptcha.reset(hcaptchaWidgetIdRef.current);
-                                        hcaptchaWidgetIdRef.current = null;
-                                      }
-                                    } catch (e) {}
-                                  }}>Cancel</button>
-                                  <button className="btn primary" onClick={async () => {
-                                    // ensure widget rendered
-                                    if (!window || !window.hcaptcha || hcaptchaWidgetIdRef.current == null) { showToast('Captcha not ready'); return; }
-                                    const token = window.hcaptcha.getResponse(hcaptchaWidgetIdRef.current);
-                                    if (!token) { showToast('Please complete the captcha'); return; }
-                                    setPosting(true);
-                                    try {
-                                      const txt = pendingCommentRef.current;
-                                      pendingCommentRef.current = null;
-                                      const r = await apiPostComment(model.id, txt, token);
-                                      if (r?.comment) {
-                                        const normalized = normalizeComment(r.comment);
-                                        if (normalized) {
-                                          setComments(prev => [normalized, ...prev]);
-                                          adjustCommentCount(1);
-                                        }
-                                        setCommentText('');
-                                        if (composerRef.current) composerRef.current.style.height = 'auto';
-                                        try { showToast('Comment posted'); } catch {}
-                                      }
-                                    } catch (e) {
-                                      console.error('post comment via captcha failed', e);
-                                    } finally {
-                                      setPosting(false);
-                                      setShowCaptchaDialog(false);
-                                      try { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); } catch (e) {}
-                                      hcaptchaWidgetIdRef.current = null;
-                                    }
-                                  }}>Post</button>
-                                </div>
-                              </div>
-                            </div>
-                          )}
+                          {/* Captcha modal removed from here — a single global captcha modal is rendered later so it works on both mobile and desktop */}
                         </div>
                       </>
                     ) : (
@@ -1108,23 +1119,17 @@ export default function ModelDetail() {
                     })}
                   </div>
                 </div>
+                )}
               </div>
 
         <aside className="detail-side">
           {model.publishedAt && (
-            <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>
-              Published {new Date(model.publishedAt).toLocaleDateString()}
-            </div>
-          )}
-
-          {/* Dimensions (computed from .mcstructure when available) */}
-          {dimsLoading && (
-            <div className="muted" style={{ fontSize: 13, marginBottom: 8 }}>Detecting dimensions…</div>
-          )}
-          {dimensions && (typeof dimensions.length === 'number') && (
-            <div style={{ marginTop: 8 }}>
-              <h3 style={{ margin: '0 0 6px' }}>Dimensions</h3>
-              <div className="muted">{dimensions.length} × {dimensions.width} × {dimensions.height} blocks</div>
+            <div className="published muted" style={{ fontSize: 13, marginBottom: 8 }}>
+              Published {new Date(model.publishedAt).toLocaleDateString('en-US', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+})}
             </div>
           )}
 
@@ -1145,6 +1150,14 @@ export default function ModelDetail() {
             </div>
           )}
 
+          {/* Dimensions (computed from .mcstructure when available) */}
+          <div className="dimensions" style={{ marginTop: 8 }}>
+            <h3 style={{ margin: '0 0 6px' }}>Dimensions</h3>
+            <div className="muted">
+              {dimsLoading ? 'Detecting dimensions…' : dimensions ? `${dimensions.length} × ${dimensions.width} × ${dimensions.height} blocks` : 'Not available'}
+            </div>
+          </div>
+
           <div className="materials">
             <h3>Materials needed</h3>
             {materials.length > 0 ? (
@@ -1155,7 +1168,20 @@ export default function ModelDetail() {
                   ))}
                 </ul>
                 {showCollapse && !materialsExpanded && (
-                  <button className="btn" style={{ marginTop: 8 }} onClick={() => setMaterialsExpanded(true)}>
+                  <button
+                    className="btn"
+                    style={{ marginTop: 8 }}
+                    onClick={(e) => {
+                      // On small screens open a modal dialog instead of expanding inline
+                      try {
+                        if (typeof window !== 'undefined' && window.innerWidth <= 900) {
+                          setMobileMaterialsOpen(true);
+                          return;
+                        }
+                      } catch (e) {}
+                      setMaterialsExpanded(true);
+                    }}
+                  >
                     ...{hiddenCount} more items, view more
                   </button>
                 )}
@@ -1169,6 +1195,293 @@ export default function ModelDetail() {
               <p className="muted">No materials list provided.</p>
             )}
           </div>
+          {/* On mobile, render the comments inside the aside after materials so materials come first */}
+          {isMobile && (
+            <div className="comments" style={{ marginTop: 14 }}>
+              <h3>Comments{commentDisplayCount > 0 ? ` (${commentDisplayCount})` : ''}</h3>
+
+              {/* Comment composer (shows avatar + placeholder) */}
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginTop: 8 }}>
+                {user ? (
+                  <>
+                    {user.avatarUrl ? (
+                      <img src={user.avatarUrl} alt="Your avatar" width={40} height={40} style={{ borderRadius: '50%' }} />
+                    ) : (
+                      <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--border)' }} />
+                    )}
+                    <div style={{ flex: 1 }}>
+                      <textarea
+                        ref={composerRef}
+                        className="comment-input"
+                        value={commentText}
+                        onChange={(e) => { setCommentText(e.target.value); autoResizeTextarea(e.target); }}
+                        rows={1}
+                        placeholder={`Comment as ${user.username}...`}
+                      />
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        <button className="btn primary" onClick={async () => {
+                          const text = commentText && commentText.trim();
+                          if (!text) return;
+                          if (HCAPTCHA_SITEKEY && typeof window !== 'undefined' && window.hcaptcha) {
+                            pendingCommentRef.current = text;
+                            setShowCaptchaDialog(true);
+                            return;
+                          }
+                          setPosting(true);
+                          try {
+                            const r = await apiPostComment(model.id, text);
+                            if (r?.comment) {
+                              const normalized = normalizeComment(r.comment);
+                              if (normalized) {
+                                setComments(prev => [normalized, ...prev]);
+                                adjustCommentCount(1);
+                              }
+                              setCommentText('');
+                              if (composerRef.current) composerRef.current.style.height = 'auto';
+                              try { showToast('Comment posted'); } catch {}
+                            }
+                          } catch (e) {
+                            console.error('post comment failed', e);
+                          }
+                          setPosting(false);
+                        }} disabled={posting}>{posting ? 'Posting…' : 'Post comment'}</button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <p className="muted">Please log in to post comments.</p>
+                )}
+              </div>
+
+              <div className="comments-divider" />
+              <div style={{ marginTop: 12 }}>
+                {comments.length === 0 && <p className="muted">No comments yet.</p>}
+                {comments.map((c) => {
+                  const key = String(c.id);
+                  const likeCount = typeof c.likeCount === 'number' ? c.likeCount : 0;
+                  const isPendingLike = !!pendingCommentLikes[key];
+                  const likeIconClass = c.liked ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
+                  const likeLabel = `${likeCount} ${likeCount === 1 ? 'like' : 'likes'}`;
+                  const likeTitle = c.liked ? 'Unlike comment' : 'Like comment';
+                  return (
+                    <div key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', marginBottom: 8 }}>
+                    {/* clickable avatar -> author page */}
+                    <a
+                      href={`/user/${encodeURIComponent(String(c.username || ''))}`}
+                      onClick={(e) => { e.preventDefault(); try { navigate(`/user/${encodeURIComponent(String(c.username || ''))}`); } catch (_) {} }}
+                      style={{ width: 36, height: 36, borderRadius: '50%', overflow: 'hidden', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', textDecoration: 'none' }}
+                      title={c.username}
+                    >
+                      {c.avatarUrl ? (
+                        <img src={c.avatarUrl} alt={`${c.username} avatar`} width={36} height={36} style={{ borderRadius: '50%', display: 'block' }} />
+                      ) : (
+                        <span className="avatar-initial-primary" aria-hidden="true" style={{ width: 36, height: 36, fontSize: 14 }}>{(c.username || '?').charAt(0).toUpperCase()}</span>
+                      )}
+                    </a>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <a
+                          className="comment-author"
+                          href={`/user/${encodeURIComponent(String(c.username || ''))}`}
+                          onClick={(e) => { e.preventDefault(); try { navigate(`/user/${encodeURIComponent(String(c.username || ''))}`); } catch (_) {} }}
+                          style={{ fontWeight: 600, color: 'inherit', textDecoration: 'none' }}
+                        >
+                          {c.username}
+                        </a>
+                        <div className="muted" style={{ fontWeight: 400, marginLeft: 8, fontSize: 12 }}>{formatDate(c.createdAt)}</div>
+                        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 12, color: 'var(--muted)' }}>{likeLabel}</span>
+                          <button
+                            className="comment-action-icon"
+                            title={likeTitle}
+                            aria-label={likeTitle}
+                            aria-pressed={!!c.liked}
+                            onClick={() => handleToggleCommentLike(c.id)}
+                            disabled={isPendingLike}
+                            style={{ color: c.liked ? 'var(--danger, #ef4444)' : undefined, opacity: isPendingLike ? 0.5 : 1 }}
+                          >
+                            <i className={likeIconClass} aria-hidden="true"></i>
+                          </button>
+
+                          {user && c.userId && (
+                            <>
+                              {String(c.userId) === String(user.userId) && (
+                                <button
+                                  className="comment-action-icon"
+                                  title="Edit comment"
+                                  aria-label="Edit comment"
+                                  onClick={() => { setEditingId(c.id); setEditingText(c.text); }}
+                                >
+                                  <i className="fa-solid fa-pen" aria-hidden="true"></i>
+                                </button>
+                              )}
+
+                              {(String(c.userId) === String(user.userId) || !!user.isAdmin) && (
+                                <button
+                                  className="comment-action-icon"
+                                  title="Delete comment"
+                                  aria-label="Delete comment"
+                                  onClick={async () => {
+                                    try {
+                                      const ok = await confirm('Delete this comment?');
+                                      if (!ok) return;
+                                      const r = await apiDeleteComment(model.id, c.id);
+                                      if (r?.ok) {
+                                        setComments(prev => prev.filter(x => x.id !== c.id));
+                                        adjustCommentCount(-1);
+                                        setPendingCommentLikes(prev => {
+                                          const pendingKey = String(c.id);
+                                          if (!prev[pendingKey]) return prev;
+                                          const copy = { ...prev };
+                                          delete copy[pendingKey];
+                                          return copy;
+                                        });
+                                        try { showToast('Comment deleted'); } catch {}
+                                      }
+                                    } catch (_) {}
+                                  }}
+                                >
+                                  <i className="fa-solid fa-trash" aria-hidden="true"></i>
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </div>
+
+                      {editingId === c.id ? (
+                        <div style={{ marginTop: 8 }}>
+                          <textarea
+                            ref={editRef}
+                            value={editingText}
+                            onChange={(e) => { setEditingText(e.target.value); autoResizeTextarea(e.target); }}
+                            rows={1}
+                            className="comment-input"
+                            style={{ borderBottom: '1px solid var(--border)' }}
+                          />
+                          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                            <button className="btn primary" onClick={async () => {
+                              if (!editingText || !editingText.trim()) return;
+                              try {
+                                const r = await apiEditComment(model.id, c.id, editingText.trim());
+                                if (r?.comment) {
+                                  const normalized = normalizeComment(r.comment);
+                                  if (normalized) {
+                                    setComments(prev => prev.map(p => p.id === c.id ? normalized : p));
+                                  }
+                                  setEditingId(null);
+                                  setEditingText('');
+                                  try { showToast('Comment updated'); } catch {}
+                                }
+                              } catch (_) {}
+                            }}>Save</button>
+                            <button className="btn" onClick={() => { setEditingId(null); setEditingText(''); }}>Cancel</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="muted" style={{ marginTop: 2 }}>{c.text}</div>
+                      )}
+                    </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {/* Mobile modal: show all materials in a dialog on small screens */}
+          {mobileMaterialsOpen && (
+            <div
+              className="modal-backdrop"
+              role="dialog"
+              aria-modal="true"
+              onClick={() => setMobileMaterialsOpen(false)}
+              style={{ zIndex: 2200 }}
+            >
+              <div className="modal materials-modal confirm-pop" onClick={(e) => e.stopPropagation()}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <div className="modal-head">Materials needed</div>
+                  <button className="btn" onClick={() => setMobileMaterialsOpen(false)}>Close</button>
+                </div>
+                <div style={{ maxHeight: '60vh', overflow: 'auto' }}>
+                  <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 8 }} className="materials-list-modal">
+                    {materials.map((mat, i) => (
+                      <MaterialRow key={i} mat={mat} />
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Global captcha modal (renders the visible hCaptcha widget). Rendered once so
+              it works regardless of where the comment composer lives (mobile vs desktop). */}
+          {showCaptchaDialog && (
+            <div
+              role="dialog"
+              aria-modal="true"
+              className="modal-backdrop"
+              style={{ zIndex: 2200 }}
+              onClick={() => {
+                /* click outside cancels */
+                setShowCaptchaDialog(false);
+                try {
+                  if (hcaptchaWidgetIdRef.current != null) {
+                    window.hcaptcha.reset(hcaptchaWidgetIdRef.current);
+                    hcaptchaWidgetIdRef.current = null;
+                  }
+                } catch (e) {}
+              }}
+            >
+              <div className="modal confirm-pop captcha-modal" style={{ maxWidth: 540, width: '92%' }} onClick={(e) => e.stopPropagation()}>
+                <div className="modal-head">Please verify you are human</div>
+                <div className="muted" style={{ marginBottom: 12 }}>Complete the captcha below to confirm you're not a bot. This helps keep our community clean.</div>
+
+                <div ref={modalHcaptchaContainerRef} className="hcaptcha-widget" style={{ marginBottom: 12 }} />
+
+                <div className="modal-actions" style={{ display: 'flex', justifyContent: 'center', gap: 8 }}>
+                  <button className="btn" onClick={() => {
+                    setShowCaptchaDialog(false);
+                    try {
+                      if (hcaptchaWidgetIdRef.current != null) {
+                        window.hcaptcha.reset(hcaptchaWidgetIdRef.current);
+                        hcaptchaWidgetIdRef.current = null;
+                      }
+                    } catch (e) {}
+                  }}>Cancel</button>
+                  <button className="btn primary" onClick={async () => {
+                    // ensure widget rendered
+                    if (!window || !window.hcaptcha || hcaptchaWidgetIdRef.current == null) { showToast('Captcha not ready'); return; }
+                    const token = window.hcaptcha.getResponse(hcaptchaWidgetIdRef.current);
+                    if (!token) { showToast('Please complete the captcha'); return; }
+                    setPosting(true);
+                    try {
+                      const txt = pendingCommentRef.current;
+                      pendingCommentRef.current = null;
+                      const r = await apiPostComment(model.id, txt, token);
+                      if (r?.comment) {
+                        const normalized = normalizeComment(r.comment);
+                        if (normalized) {
+                          setComments(prev => [normalized, ...prev]);
+                          adjustCommentCount(1);
+                        }
+                        setCommentText('');
+                        if (composerRef.current) composerRef.current.style.height = 'auto';
+                        try { showToast('Comment posted'); } catch {}
+                      }
+                    } catch (e) {
+                      console.error('post comment via captcha failed', e);
+                    } finally {
+                      setPosting(false);
+                      setShowCaptchaDialog(false);
+                      try { window.hcaptcha.reset(hcaptchaWidgetIdRef.current); } catch (e) {}
+                      hcaptchaWidgetIdRef.current = null;
+                    }
+                  }}>Post</button>
+                </div>
+              </div>
+            </div>
+          )}
+
         </aside>
       </div>
     </div>

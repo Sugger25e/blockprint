@@ -160,7 +160,7 @@ export default function Profile() {
 
   return (
     <div className="page">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+      <div className="profile-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {user.avatarUrl ? (
             <img src={user.avatarUrl} alt="Avatar" width={40} height={40} style={{ borderRadius: '50%' }} />
@@ -210,7 +210,7 @@ export default function Profile() {
             })()}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+  <div className="profile-actions" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <button className="btn" onClick={() => {
             const handle = encodeURIComponent(user?.username || user?.discordId || user?.userId || user?.id || '');
             if (handle) navigate(`/user/${handle}`);

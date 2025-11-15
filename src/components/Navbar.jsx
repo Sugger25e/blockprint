@@ -48,9 +48,9 @@ export default function Navbar() {
             <a href="/admin?tab=submissions" className={isAdminPath ? 'active' : undefined} onClick={(e) => { e.preventDefault(); onAdminLeaveNavigate(()=>navigate('/admin?tab=submissions')); }}>Admin</a>
           )}
         </nav>
-        <div className="nav-right" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div className="nav-right" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {/* Keep the theme switch visually stable by fixing its box size */}
-          <div style={{ width: 56, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="theme-switch-wrap" style={{ width: 56, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <button
               className={`theme-switch ${theme === 'dark' ? 'is-dark' : ''}`}
               onClick={toggle}
@@ -67,7 +67,7 @@ export default function Navbar() {
           </div>
 
           {/* Reserve a box for avatar / login to avoid layout jumps on reload. Increased to fit a rectangular login button. */}
-          <div style={{ minWidth: 84, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div className="nav-user" style={{ minWidth: 84, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             {loading ? (
               <div className="skeleton" style={{ width: 32, height: 32, borderRadius: '50%' }} />
             ) : user ? (
@@ -109,12 +109,28 @@ export default function Navbar() {
         </div>
       </div>
       <div id="mobile-menu" className={`mobile-menu ${open ? 'open' : ''}`}>
+        {/* Mobile theme toggle */}
+        <div style={{ display: 'flex', justifyContent: 'flex-start', padding: '8px 0' }}>
+          <button
+            className={`theme-switch ${theme === 'dark' ? 'is-dark' : ''}`}
+            onClick={() => { toggle(); }}
+            aria-label="Toggle theme"
+            aria-pressed={theme === 'dark'}
+          >
+            <span className="switch-track">
+              <span className="switch-thumb">
+                <i className="fa-solid fa-sun sun-icon" aria-hidden="true"></i>
+                <i className="fa-solid fa-moon moon-icon" aria-hidden="true"></i>
+              </span>
+            </span>
+          </button>
+        </div>
         <a href="/" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>Home</a>
   <a href="/upload" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>Upload</a>
         <a href="/about" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>About</a>
-        {!loading && (user ? (
+          {!loading && (user ? (
           <>
-            <a href="/profile" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>My submissions</a>
+            {/* 'My submissions' removed from mobile menu per user request */}
             {user.isAdmin && <a href="/admin?tab=submissions" onClick={(e)=>{ e.preventDefault(); setOpen(false); onAdminLeaveNavigate(()=>navigate('/admin?tab=submissions')); }}>Admin</a>}
           </>
         ) : (

@@ -47,8 +47,8 @@ body {
 .brand { color: var(--text); text-decoration: none; font-weight: 700; }
 /* Brand logo + text alignment */
 .brand { display: inline-flex; align-items: center; gap: 8px; }
-.brand-logo { width: 28px; height: 28px; display: inline-block; object-fit: contain; }
-.brand-text { font-weight: 700; font-size: 18px; }
+.brand-logo { width: 40px; height: 40px; display: inline-block; object-fit: contain; }
+.brand-text { font-weight: 700; font-size: 20px; }
 .nav-links { display: flex; align-items: center; gap: 6px; }
 .nav-links a { color: var(--muted); text-decoration: none; margin: 0 4px; padding: 6px 8px; border-radius: 6px; transition: background-color 160ms ease, color 160ms ease, transform 160ms ease; }
 .nav-links a:hover { color: var(--text); background: var(--border); transform: translateY(-1px); }
@@ -90,7 +90,33 @@ body, .navbar, .model-card, .detail-viewer, .mobile-menu, .btn, .page, .detail, 
   .hamburger { display: inline-flex; }
   /* On small screens only show the logo to save space */
   .brand-text { display: none; }
+  /* Hide desktop theme switch inside the nav-right when on mobile; mobile menu will include the toggle */
+  .theme-switch-wrap { display: none; }
+  /* Also hide any theme-switch that might be rendered inline to avoid duplicates */
+  .nav-right .theme-switch { display: none !important; }
+  /* Reduce gap between avatar/login and hamburger on mobile */
+  .nav-right { gap: 4px; }
+  /* Allow the avatar/login container to shrink on mobile to remove extra empty space */
+  .nav-user { min-width: 84px; }
+  .nav-user .btn { min-width: 84px; }
+  .nav-user img, .nav-user .avatar-initial-primary { width: 32px; height: 32px; }
+  .nav-user { box-sizing: content-box; }
+  /* Shrink the nav-user container on narrow screens */
+  @media (max-width: 520px) {
+    .nav-user { min-width: 44px !important; }
+    .nav-user .btn { min-width: 44px !important; padding: 6px 8px !important; }
+  }
 }
+
+/* Mobile menu toggle sizing & alignment fixes */
+.mobile-menu .theme-switch { width: 48px; height: 28px; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.mobile-menu .theme-switch .switch-track { border-radius: 999px; }
+.mobile-menu .theme-switch .switch-thumb { top: 3px; left: 3px; width: 22px; height: 22px; }
+.mobile-menu .theme-switch.is-dark .switch-thumb { transform: translateX(20px); }
+
+/* Ensure icons inside the thumb are centered */
+.mobile-menu .theme-switch .switch-thumb .sun-icon,
+.mobile-menu .theme-switch .switch-thumb .moon-icon { font-size: 14px; line-height: 1; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); }
 
 .home {
   max-width: 1200px;
@@ -539,6 +565,9 @@ label { font-weight: 600; color: var(--text); }
 .social-icon { color: var(--muted); text-decoration: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; }
 .social-icon:hover { color: var(--accent); }
 
+/* Mobile meta hidden by default; revealed in the ModelDetail responsive block */
+.mobile-meta { display: none; }
+
 @media (max-width: 900px) {
   .detail-layout { grid-template-columns: 1fr; }
 }
@@ -552,13 +581,43 @@ label { font-weight: 600; color: var(--text); }
     align-items: start;
   }
   .detail-left, .detail-side { width: 100% !important; }
-  .detail-viewer { margin-top: 8px !important; min-height: 40vh; }
-  /* Reduce viewer height on small screens for better UX */
+  /* Keep detail viewer at the same compact height used elsewhere (e.g. model-card-viewer) on small screens
+     so the viewer isn't visually cut off. This keeps the height stable instead of switching to viewport-based
+     min-heights that can cause the canvas to be clipped. */
+  .detail-viewer { margin-top: 8px !important; height: 220px !important; }
+  /* Ensure the ModelViewer root expands to fill the viewer so
+    the Canvas gets the full pixel area and won't be clipped. Target the component root
+    specifically so overlay elements (badges/controls) are not affected. */
+  .detail-viewer > .model-viewer-root { height: 100% !important; min-height: 0 !important; }
+  /* Ensure the smallest devices use the same compact height */
   @media (max-width: 420px) {
-    .detail-viewer { min-height: 36vh; }
+    .detail-viewer { min-height: 220px !important; }
   }
   /* Make the ambient control responsive */
   .detail-left .field input[type="range"] { width: 100% !important; }
+  /* Tweak likes/downloads capsule sizing for small screens so they don't overflow
+     the viewer or appear visually oversized. */
+  .viewer-like-badge {
+    top: 8px;
+    left: 8px;
+    padding: 3px 6px;
+    font-size: 12px;
+    line-height: 20px;
+  }
+  .model-like-badge {
+    left: 8px;
+    bottom: 8px;
+    padding: 4px 6px;
+    font-size: 12px;
+    height: auto;
+    line-height: 20px;
+  }
+  /* Slightly reduce viewer control button size to fit compact viewers */
+  .viewer-controls .icon-btn { width: 30px; height: 30px; }
+
+  /* Show mobile meta (published/description/tags) directly below ambient control and hide aside copies */
+  .mobile-meta { display: block !important; margin-top: 12px; }
+  .detail-side .published, .detail-side .description, .detail-side .categories, .detail-side .dimensions { display: none !important; }
 }
 
 .filter-bar { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; }
@@ -582,11 +641,58 @@ label { font-weight: 600; color: var(--text); }
 .tag { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 999px; background: var(--border); color: var(--text); font-size: 12px; }
 .skeleton-viewer { width: 100%; height: 220px; border-radius: 0; }
 .skeleton-line { height: 14px; width: 70%; }
+
+/* Mobile metadata block (hidden by default, shown on small screens) */
+/* NOTE: default hidden behaviour is handled by layout — no global override here to avoid specificity conflicts. */
 .skeleton-button { height: 36px; width: 120px; border-radius: 8px; }
 
 .admin-page h2 { margin: 0; }
 .admin-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .tabs { display: inline-flex; gap: 8px; align-items: center; }
+
+/* Materials modal tweaks and animations */
+.materials-modal { width: min(520px, 96vw); max-height: 80vh; overflow: hidden; }
+.materials-modal .modal-head { font-size: 16px; font-weight: 700; }
+.materials-list-modal li { opacity: 0; transform: translateY(6px); animation: materialItemIn 220ms cubic-bezier(.2,.9,.2,1) forwards; }
+.materials-list-modal li:nth-child(1) { animation-delay: 40ms; }
+.materials-list-modal li:nth-child(2) { animation-delay: 70ms; }
+.materials-list-modal li:nth-child(3) { animation-delay: 100ms; }
+.materials-list-modal li:nth-child(4) { animation-delay: 130ms; }
+.materials-list-modal li:nth-child(5) { animation-delay: 160ms; }
+.materials-list-modal li:nth-child(6) { animation-delay: 190ms; }
+.materials-list-modal li:nth-child(7) { animation-delay: 220ms; }
+.materials-list-modal li:nth-child(8) { animation-delay: 250ms; }
+@keyframes materialItemIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* Ensure modal materials list items use the same row layout as the aside materials list */
+.materials-list-modal li { padding: 8px; display: flex; justify-content: space-between; align-items: center; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+
+/* Responsive: prevent admin tabs from forcing horizontal scroll on small screens */
+@media (max-width: 720px) {
+  .admin-head { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .tabs { display: flex; flex-wrap: wrap; gap: 8px; width: 100%; }
+  /* Allow tabs to wrap to a second row instead of pushing layout horizontally */
+  .tabs .tab { flex: 0 0 auto; white-space: nowrap; }
+}
+
+  /* Profile header: make actions drop below author details on small screens */
+  .profile-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  .profile-actions { display: flex; gap: 8px; align-items: center; }
+
+  @media (max-width: 720px) {
+    /* Stack the profile header and force left alignment even if inline styles exist */
+    .profile-head { flex-direction: column !important; align-items: flex-start !important; }
+    .profile-actions { width: 100%; display: flex; gap: 8px; justify-content: flex-start; margin-top: 8px; }
+    /* Make action buttons wrap if needed on narrow screens */
+    .profile-actions .btn { flex: 0 0 auto; }
+
+    /* Ensure the avatar + author details row is left-aligned and uses full width */
+    .profile-head > div:first-child { display: flex !important; align-items: flex-start !important; gap: 12px; width: 100% !important; }
+    /* Left-align the text inside the author details column and let it grow */
+    .profile-head > div:first-child > div { text-align: left !important; width: 100% !important; }
+    /* Ensure avatar doesn't center itself by shrinking/growing unexpectedly */
+    .profile-head img, .profile-head .avatar-initial-primary { flex: 0 0 auto; margin-right: 12px; }
+  }
 .tab { border: 1px solid var(--border); background: var(--card); color: var(--text); border-radius: 999px; padding: 8px 12px; cursor: pointer; }
 .tab.active { background: color-mix(in sRGB, var(--accent) 14%, var(--card)); border-color: var(--accent); }
 .admin-card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 16px; max-width: 420px; margin: 40px auto; box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
@@ -726,7 +832,7 @@ label { font-weight: 600; color: var(--text); }
 }
 .glb-preview canvas { width: 100% !important; height: 100% !important; display: block; }
 .glb-preview > div { width: 100% !important; }
-.detail-viewer canvas, .detail-viewer > canvas { width: 100% !important; height: auto !important; display: block; }
+.detail-viewer canvas, .detail-viewer > canvas { width: 100% !important; height: 100% !important; display: block; }
 
 /* Ambient intensity control styling in ModelDetail */
 .detail-left .field input[type="range"] { width: 220px; }
