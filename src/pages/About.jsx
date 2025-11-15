@@ -18,16 +18,16 @@ export default function About() {
     <div className="page">
       <h2>About Blockprint</h2>
 
-      <section className="panel" style={{ marginTop: 12 }}>
-        <div className="panel-head"><strong>What is this?</strong></div>
+      <section className="panel" style={{ marginTop: 8, padding: '4px 12px' }}>
+        <h3>What is this?</h3>
         <p>
           Blockprint is a curated showcase of Minecraft builds with interactive 3D previews (.glb) you can rotate and zoom in your browser.
           Each build has its own detail page, categories, materials list, creator credits, and a downloadable Holoprint pack to help you recreate it in-game.
         </p>
       </section>
 
-      <section className="panel" style={{ marginTop: 12 }}>
-        <div className="panel-head"><strong>How it works (public)</strong></div>
+      <section className="panel" style={{ marginTop: 8, padding: '4px 12px' }}>
+        <h3>How it works (public)</h3>
         <ul>
           <li>Discover page lists published builds only (drafts are hidden).</li>
           <li>Click a card for a full detail view with an ambient-lit 3D viewer and remembered camera/zoom per model.</li>
@@ -36,8 +36,8 @@ export default function About() {
         </ul>
       </section>
 
-      <section className="panel" style={{ marginTop: 12 }}>
-        <div className="panel-head"><strong>How it works (uploads & admin)</strong></div>
+      <section className="panel" style={{ marginTop: 8, padding: '4px 12px' }}>
+        <h3>How it works (uploads & admin)</h3>
         <ul>
           <li>Public Upload accepts .glb and .mcstructure, with optional credits and socials.</li>
           <li>Admin reviews submissions and can approve them into Drafts.</li>
@@ -46,8 +46,8 @@ export default function About() {
         </ul>
       </section>
 
-      <section className="panel" style={{ marginTop: 12 }}>
-        <div className="panel-head"><strong>Tech highlights</strong></div>
+      <section className="panel" style={{ marginTop: 8, padding: '4px 12px' }}>
+        <h3>Tech highlights</h3>
         <ul>
           <li>React with React Router for pages; Three.js via @react-three/fiber and drei for the viewer.</li>
           <li>Contexts for theme, models (API + manifest fallback), and per-model viewer state.</li>
@@ -56,8 +56,8 @@ export default function About() {
         </ul>
       </section>
 
-      <section className="panel" style={{ marginTop: 12 }}>
-        <div className="panel-head"><strong>Credits</strong></div>
+      <section className="panel" style={{ marginTop: 8, padding: '4px 12px' }}>
+        <h3>Credits</h3>
         <ul>
           <li>
             Holoprint tool: <a href="https://holoprint-mc.github.io/" target="_blank" rel="noreferrer">holoprint-mc.github.io</a> — Author: <strong>SuperLlama88888</strong>

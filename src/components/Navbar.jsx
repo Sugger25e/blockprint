@@ -26,6 +26,7 @@ export default function Navbar() {
   const isHome = location.pathname === '/';
   const isUpload = location.pathname === '/upload';
   const isAbout = location.pathname === '/about';
+  const isFAQ = location.pathname === '/faq';
   const isAdminPath = location.pathname.startsWith('/admin');
   const isProfilePath = location.pathname.startsWith('/profile');
 
@@ -41,6 +42,7 @@ export default function Navbar() {
         <nav className="nav-links" aria-label="Primary">
           <a href="/" className={isHome ? 'active' : undefined} onClick={() => onAdminLeaveNavigate()}>Home</a>
           <a href="/upload" className={isUpload ? 'active' : undefined} onClick={() => onAdminLeaveNavigate()}>Upload</a>
+          <a href="/faq" className={isFAQ ? 'active' : undefined} onClick={() => onAdminLeaveNavigate()}>FAQ</a>
           <a href="/about" className={isAbout ? 'active' : undefined} onClick={() => onAdminLeaveNavigate()}>About</a>
           {/* Admin tab only for whitelisted admins */}
           {/* Admin should navigate within SPA when switching tabs; use SPA navigate for admin tabs */}
@@ -127,6 +129,7 @@ export default function Navbar() {
         </div>
         <a href="/" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>Home</a>
   <a href="/upload" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>Upload</a>
+        <a href="/faq" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>FAQ</a>
         <a href="/about" onClick={()=>onAdminLeaveNavigate(()=>setOpen(false))}>About</a>
           {!loading && (user ? (
           <>

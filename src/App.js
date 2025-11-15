@@ -1,6 +1,6 @@
 import './App.css';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ModelsProvider } from './context/ModelsContext';
 import { ViewerStateProvider } from './context/ViewerStateContext';
 import { ThemeProvider } from './context/ThemeContext';
@@ -16,12 +16,24 @@ import Profile from './pages/Profile';
 import About from './pages/About';
 import Terms from './pages/Terms';
 import Privacy from './pages/Privacy';
+import FAQ from './pages/FAQ';
 import Admin from './pages/Admin';
 import ManageEdit from './pages/ManageEdit';
 import ProfileManage from './pages/ProfileManage';
 import NotFound from './pages/NotFound';
 
+const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
+
 function App() {
+  useEffect(() => {
+    const today = new Date().toDateString();
+    if (localStorage.getItem('visited_' + today) !== 'true') {
+      fetch(`${API_BASE}/api/track-visit`, { method: 'POST' }).then(() => {
+        localStorage.setItem('visited_' + today, 'true');
+      }).catch(() => {});
+    }
+  }, []);
+
   return (
     <BrowserRouter>
       <ThemeProvider>
@@ -41,6 +53,7 @@ function App() {
                     <Route path="/upload" element={<Upload />} />
                     <Route path="/profile" element={<Profile />} />
                     <Route path="/about" element={<About />} />
+                    <Route path="/faq" element={<FAQ />} />
                     <Route path="/terms" element={<Terms />} />
                     <Route path="/privacy" element={<Privacy />} />
                     <Route path="/model/:id" element={<ModelDetail />} />

@@ -4,12 +4,18 @@ import useReloadableNavigate from '../utils/useReloadableNavigate';
 import ModelViewer from '../components/ModelViewer';
 import ModelCard from '../components/ModelCard';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import NotFound from './NotFound';
+import { Line, Bar } from 'react-chartjs-2';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, BarElement, BarController } from 'chart.js';
+
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, BarElement, BarController);
 
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:4000';
 
 export default function Admin() {
   const { user, loading } = useAuth();
+  const { theme } = useTheme();
   const navigate = useReloadableNavigate();
 
   const [subs, setSubs] = useState([]);
@@ -23,6 +29,7 @@ export default function Admin() {
   const [buildsLoading, setBuildsLoading] = useState(false);
   const [drafts, setDrafts] = useState([]);
   const [draftsLoading, setDraftsLoading] = useState(false);
+  const [analytics, setAnalytics] = useState({});
   const [draftPage, setDraftPage] = useState(0); // pagination: index of currently visible draft
   const viewerRefs = useRef({});
 
@@ -88,6 +95,7 @@ export default function Admin() {
     if (!user?.isAdmin) return;
     if (tab === 'manage') loadBuilds();
     if (tab === 'drafts') loadDrafts();
+    if (tab === 'analytics') loadAnalytics();
   }, [user, tab]);
 
   // Keep tab in sync with URL search params (so back/forward preserves selection)
@@ -99,10 +107,10 @@ export default function Admin() {
   // Central tab setter that updates the URL and triggers loaders (no full reload)
   const handleSetTab = (t) => {
     // normalize allowed tabs
-    const allowed = ['submissions', 'drafts', 'manage', 'upload'];
+    const allowed = ['submissions', 'drafts', 'manage', 'upload', 'analytics'];
     const target = allowed.includes(t) ? t : 'submissions';
     setTab(target);
-    try { setSearchParams({ tab: target }); } catch (_) {}
+    navigate('/admin?tab=' + target, { replace: true });
     // trigger immediate reload of the tab's data
     if (target === 'submissions') loadSubs();
     if (target === 'manage') loadBuilds();
@@ -126,6 +134,16 @@ export default function Admin() {
       setDraftPage(0);
     } catch (_) { setDrafts([]); }
     setDraftsLoading(false);
+  };
+
+  const loadAnalytics = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/analytics`, { credentials: 'include' });
+      const data = await res.json();
+      setAnalytics(data);
+    } catch (_) {
+      setAnalytics({});
+    }
   };
 
   // Small component to render a single draft with preview/holoprint status and capture/upload controls
@@ -739,6 +757,7 @@ export default function Admin() {
           <button className={`tab ${tab==='drafts'?'active':''}`} onClick={() => handleSetTab('drafts')}>Drafts</button>
           <button className={`tab ${tab==='manage'?'active':''}`} onClick={() => handleSetTab('manage')}>Manage</button>
           <button className={`tab ${tab==='upload'?'active':''}`} onClick={() => handleSetTab('upload')}>Upload Build</button>
+          <button className={`tab ${tab==='analytics'?'active':''}`} onClick={() => handleSetTab('analytics')}>Analytics</button>
         </div>
       </div>
 
@@ -968,6 +987,82 @@ export default function Admin() {
                   ))}
             </div>
           )}
+        </div>
+      )}
+
+      {tab==='analytics' && (
+        <div className="panel">
+          <div className="panel-head"><strong>Analytics Dashboard</strong></div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '15px', marginBottom: '30px' }}>
+            <div style={{ padding: '15px', border: theme === 'dark' ? '1px solid #555' : '1px solid #ddd', borderRadius: '8px', textAlign: 'center', backgroundColor: theme === 'dark' ? 'transparent' : '#f9f9f9' }}>
+              <h3 style={{ margin: '0 0 8px 0', color: theme === 'dark' ? 'white' : '#333', fontSize: '14px' }}>Total Visits</h3>
+              <p style={{ fontSize: '20px', fontWeight: 'bold', color: theme === 'dark' ? 'white' : '#007bff', margin: 0 }}>{analytics.totalVisits || 0}</p>
+            </div>
+            <div style={{ padding: '15px', border: theme === 'dark' ? '1px solid #555' : '1px solid #ddd', borderRadius: '8px', textAlign: 'center', backgroundColor: theme === 'dark' ? 'transparent' : '#f9f9f9' }}>
+              <h3 style={{ margin: '0 0 8px 0', color: theme === 'dark' ? 'white' : '#333', fontSize: '14px' }}>Total Builds</h3>
+              <p style={{ fontSize: '20px', fontWeight: 'bold', color: theme === 'dark' ? 'white' : '#28a745', margin: 0 }}>{analytics.totalBuilds || 0}</p>
+            </div>
+            <div style={{ padding: '15px', border: theme === 'dark' ? '1px solid #555' : '1px solid #ddd', borderRadius: '8px', textAlign: 'center', backgroundColor: theme === 'dark' ? 'transparent' : '#f9f9f9' }}>
+              <h3 style={{ margin: '0 0 8px 0', color: theme === 'dark' ? 'white' : '#333', fontSize: '14px' }}>Total Users</h3>
+              <p style={{ fontSize: '20px', fontWeight: 'bold', color: theme === 'dark' ? 'white' : '#dc3545', margin: 0 }}>{analytics.totalUsers || 0}</p>
+            </div>
+            <div style={{ padding: '15px', border: theme === 'dark' ? '1px solid #555' : '1px solid #ddd', borderRadius: '8px', textAlign: 'center', backgroundColor: theme === 'dark' ? 'transparent' : '#f9f9f9' }}>
+              <h3 style={{ margin: '0 0 8px 0', color: theme === 'dark' ? 'white' : '#333', fontSize: '14px' }}>Total Submissions</h3>
+              <p style={{ fontSize: '20px', fontWeight: 'bold', color: theme === 'dark' ? 'white' : '#ffc107', margin: 0 }}>{analytics.totalSubmissions || 0}</p>
+            </div>
+          </div>
+          <div style={{ width: '70%', height: '300px', margin: '0 auto 30px auto' }}>
+            <Line
+              data={{
+                labels: analytics.dailyVisits?.map(d => d._id) || [],
+                datasets: [{
+                  label: 'Daily Visits',
+                  data: analytics.dailyVisits?.map(d => d.count) || [],
+                  borderColor: '#007bff',
+                  backgroundColor: 'rgba(0, 123, 255, 0.2)',
+                  tension: 0.1
+                }]
+              }}
+              options={{
+                maintainAspectRatio: false,
+                responsive: true,
+                plugins: {
+                  legend: { position: 'top', labels: { color: theme === 'dark' ? 'white' : 'black' } },
+                  title: { display: true, text: 'Daily Site Visits Over Time', color: theme === 'dark' ? 'white' : 'black' }
+                },
+                scales: {
+                  x: { ticks: { color: theme === 'dark' ? 'white' : 'black' }, grid: { color: theme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)' } },
+                  y: { beginAtZero: true, ticks: { stepSize: 1, color: theme === 'dark' ? 'white' : 'black', callback: function(value) { return Number.isInteger(value) ? value : ''; } }, grid: { color: theme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)' } }
+                }
+              }}
+            />
+          </div>
+          <div style={{ width: '70%', height: '300px', margin: '0 auto' }}>
+            <Bar
+              data={{
+                labels: ['Builds', 'Users', 'Submissions'],
+                datasets: [{
+                  label: 'Platform Totals',
+                  data: [analytics.totalBuilds || 0, analytics.totalUsers || 0, analytics.totalSubmissions || 0],
+                  backgroundColor: '#007bff',
+                  borderColor: '#0056b3',
+                  borderWidth: 1
+                }]
+              }}
+              options={{
+                maintainAspectRatio: false,
+                responsive: true,
+                plugins: {
+                  legend: { position: 'top', labels: { color: theme === 'dark' ? 'white' : 'black' } },
+                  title: { display: true, text: 'Platform Metrics Overview', color: theme === 'dark' ? 'white' : 'black' }
+                },
+                scales: {
+                  x: { ticks: { color: theme === 'dark' ? 'white' : 'black' }, grid: { color: theme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)' } },
+                  y: { ticks: { color: theme === 'dark' ? 'white' : 'black' }, grid: { color: theme === 'dark' ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.1)' } }
+                }
+              }}
+            />
+          </div>
         </div>
       )}
 
