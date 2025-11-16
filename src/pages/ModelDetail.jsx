@@ -570,13 +570,45 @@ export default function ModelDetail() {
       a.download = filename || 'holoprint.mcpack';
       document.body.appendChild(a);
       a.click();
-  try { showToast('Holoprint download started', 'success'); } catch (e) {}
+  try { showToast('Holoprint download started', { type: 'success', centered: true, fontSize: 16 }); } catch (e) {}
       a.remove();
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
     } catch (_e) {
       try {
         window.open(url, '_blank', 'noopener,noreferrer');
   try { showToast('Opened holoprint in a new tab', 'success'); } catch (e) {}
+      } catch (_) {}
+    }
+  }
+
+  function suggestMcstructureFileName(m) {
+    const base = (m?.name || 'structure').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase();
+    return `${base}.mcstructure`;
+  }
+
+  async function downloadMcstructure(url, filename) {
+    // Record download when user presses the button (best-effort).
+    try {
+      setDownloadCount(prev => (typeof prev === 'number' ? prev + 1 : 1));
+      apiRecordDownload(model.id).catch(() => {});
+    } catch (_) {}
+    try {
+      const res = await fetch(url, { credentials: 'omit' });
+      if (!res.ok) throw new Error('download failed');
+      const blob = await res.blob();
+      const a = document.createElement('a');
+      const objectUrl = URL.createObjectURL(blob);
+      a.href = objectUrl;
+      a.download = filename || 'structure.mcstructure';
+      document.body.appendChild(a);
+      a.click();
+      try { showToast('MCStructure download started', { type: 'success', centered: true, fontSize: 16 }); } catch (e) {}
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1500);
+    } catch (e) {
+      try {
+        window.open(url, '_blank', 'noopener,noreferrer');
+        try { showToast('Opened structure in a new tab', 'success'); } catch (ee) {}
       } catch (_) {}
     }
   }
@@ -846,27 +878,48 @@ export default function ModelDetail() {
               </div>
             </div>
           </div>
-      {/* Holoprint */}
-      <div className="holoprint">
-        <h3 className={`holoprint-title ${infoOpen ? 'is-open' : ''}`}>
-          Holoprint <span
-            className="info"
-            tabIndex={0}
-            ref={infoRef}
-            onClick={(e) => { e.stopPropagation(); setInfoOpen(s => !s); }}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setInfoOpen(s => !s); } }}
-            aria-expanded={infoOpen}
-            aria-controls="holoprint-info"
-          ><i className="fa-solid fa-circle-info" aria-hidden="true"></i><span className="sr-only">Info</span></span>
-          <span id="holoprint-info" ref={bubbleRef} className="info-bubble" role="dialog" aria-hidden={!infoOpen}>A resource pack that displays a hologram of this build in your world to guide construction.</span>
-        </h3>
+      {/* Downloads */}
+      <div className="downloads">
+        <h3>Downloads</h3>
         <div className="actions">
-          {model.holoprintUrl ? (
-            <button className="btn primary" onClick={() => downloadHoloprint(model.holoprintUrl, suggestFileName(model))}>
-              Download Holoprint
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {model.holoprintUrl ? (
+              <button className="btn success" onClick={() => downloadHoloprint(model.holoprintUrl, suggestFileName(model))}>
+                <i className="fa-solid fa-download" aria-hidden="true"></i> Download Holoprint
+              </button>
+            ) : (
+              <button className="btn success" disabled>
+                <i className="fa-solid fa-download" aria-hidden="true"></i> Download Holoprint
+              </button>
+            )}
+            <span className="holoprint-title" style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span
+                className="info"
+                tabIndex={0}
+                ref={infoRef}
+                onClick={(e) => { e.stopPropagation(); setInfoOpen(s => !s); }}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setInfoOpen(s => !s); } }}
+                aria-expanded={infoOpen}
+                aria-controls="holoprint-info"
+              ><i className="fa-solid fa-circle-info" aria-hidden="true"></i><span className="sr-only">Info</span></span>
+              <span id="holoprint-info" ref={bubbleRef} className="info-bubble" role="dialog" aria-hidden={!infoOpen}>A resource pack that displays a hologram of this build in your world to guide construction.</span>
+            </span>
+          </div>
+          {(model?.details?.structureUrl || model?.details?.mcstructureUrl || model?.mcstructureUrl || model?.structureUrl) ? (
+            <button
+              className="btn success"
+              style={{ marginTop: 8 }}
+              onClick={() => downloadMcstructure(
+                model?.details?.structureUrl || model?.details?.mcstructureUrl || model?.mcstructureUrl || model?.structureUrl,
+                suggestMcstructureFileName(model)
+              )}
+            >
+              <i className="fa-solid fa-download" aria-hidden="true"></i> Download MCStructure
             </button>
           ) : (
-            <button className="btn" disabled>Download Holoprint</button>
+            <button className="btn success" disabled style={{ marginTop: 8 }}>
+              <i className="fa-solid fa-download" aria-hidden="true"></i> Download MCStructure
+            </button>
           )}
         </div>
       </div>

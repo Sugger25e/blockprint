@@ -35,7 +35,9 @@ export function UiProvider({ children }) {
     // opts may be an object or a string/type shorthand
     const type = typeof opts === 'string' ? opts : (opts && opts.type) || undefined;
     const duration = (opts && opts.duration) || 3200;
-    const t = { id, message, duration, closing: false, type };
+    const centered = opts && opts.centered;
+    const fontSize = (opts && opts.fontSize) || undefined;
+    const t = { id, message, duration, closing: false, type, centered, fontSize };
 
     // If there's no current toast, show immediately
     if (!toast) {
@@ -77,13 +79,12 @@ export function UiProvider({ children }) {
       <ConfirmContext.Provider value={confirmValue}>
         {children}
 
-        {/* Toast container - single toast (replace previous) */}
-          {/* Toast container: center by default, but success toasts appear on the right side */}
-          {(!toast || toast.type !== 'success') && (
+          {/* Toast container: center by default, but success toasts appear on the right side unless centered */}
+          {(!toast || (toast.type !== 'success' || toast.centered)) && (
             <div aria-live="polite" style={{ position: 'fixed', left: 0, right: 0, bottom: 24, display: 'flex', justifyContent: 'center', pointerEvents: 'none', zIndex: 2000 }}>
               <div style={{ width: 'min(920px, 92%)', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
                 {toast && (
-                  <div key={toast.id} className={`toast-item${toast.closing ? ' toast-exit' : ''}`} role="status" aria-live="polite" style={{ pointerEvents: 'auto', background: 'var(--card)', color: 'var(--text)', border: '1px solid var(--border)', padding: '10px 14px', borderRadius: 8, boxShadow: '0 12px 32px rgba(0,0,0,0.12)', width: '100%', display: 'flex', justifyContent: 'center', fontSize: 14 }}>
+                  <div key={toast.id} className={`toast-item${toast.closing ? ' toast-exit' : ''}`} role="status" aria-live="polite" style={{ pointerEvents: 'auto', background: toast.type === 'success' && !toast.centered ? 'var(--card)' : (toast.type === 'success' ? '#16a34a' : 'var(--card)'), color: toast.type === 'success' ? 'white' : 'var(--text)', border: '1px solid var(--border)', padding: '10px 14px', borderRadius: 8, boxShadow: '0 12px 32px rgba(0,0,0,0.12)', display: 'flex', justifyContent: 'center', fontSize: toast.fontSize || 14 }}>
                     {toast.message}
                   </div>
                 )}
@@ -91,9 +92,9 @@ export function UiProvider({ children }) {
             </div>
           )}
 
-          {toast && toast.type === 'success' && (
+          {toast && toast.type === 'success' && !toast.centered && (
             <div aria-live="polite" style={{ position: 'fixed', right: 20, bottom: 20, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', pointerEvents: 'none', zIndex: 2000 }}>
-              <div style={{ pointerEvents: 'auto', background: '#16a34a', color: 'white', border: '1px solid rgba(0,0,0,0.06)', padding: '10px 14px', borderRadius: 8, boxShadow: '0 12px 32px rgba(0,0,0,0.12)', fontSize: 14 }} className={`toast-item${toast.closing ? ' toast-exit' : ''}`}>
+              <div style={{ pointerEvents: 'auto', background: '#16a34a', color: 'white', border: '1px solid rgba(0,0,0,0.06)', padding: '10px 14px', borderRadius: 8, boxShadow: '0 12px 32px rgba(0,0,0,0.12)', fontSize: toast.fontSize || 14 }} className={`toast-item${toast.closing ? ' toast-exit' : ''}`}>
                 {toast.message}
               </div>
             </div>
