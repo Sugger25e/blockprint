@@ -31,6 +31,8 @@ export default function Admin() {
   const [draftsLoading, setDraftsLoading] = useState(false);
   const [analytics, setAnalytics] = useState({});
   const [draftPage, setDraftPage] = useState(0); // pagination: index of currently visible draft
+  const [managePage, setManagePage] = useState(1); // pagination for manage tab
+  const PER_PAGE = 6; // items per page for manage tab
   const viewerRefs = useRef({});
 
   useEffect(() => {
@@ -978,14 +980,79 @@ export default function Admin() {
           )}
           {!buildsLoading && builds.length === 0 && <p className="muted">No builds yet.</p>}
           {!buildsLoading && builds.length > 0 && (
+            <>
             <div className="grid fade-in">
-                  {builds.map((m) => (
-                    <div key={m.buildId || m.id}>
-                      {/* Reuse ModelCard with a custom action that goes to the edit/manage page */}
-                      <ModelCard model={m} showAuthor actionLabel="Manage" onAction={(mdl) => navigate(`/profile/${encodeURIComponent(user?.discordId || '')}/manage/${encodeURIComponent(mdl.numericId || mdl.id || mdl.buildId)}`)} />
-                    </div>
-                  ))}
+              {(() => {
+                // compute pagination
+                const total = builds.length;
+                const pages = Math.max(1, Math.ceil(total / PER_PAGE));
+                // clamp page
+                const current = Math.min(Math.max(1, managePage || 1), pages);
+                const start = (current - 1) * PER_PAGE;
+                const pageItems = builds.slice(start, start + PER_PAGE);
+                return pageItems.map((m) => (
+                  <div key={m.buildId || m.id}>
+                    {/* Reuse ModelCard with a custom action that goes to the edit/manage page */}
+                    <ModelCard model={m} showAuthor actionLabel="Manage" onAction={(mdl) => navigate(`/profile/${encodeURIComponent(user?.discordId || '')}/manage/${encodeURIComponent(mdl.numericId || mdl.id || mdl.buildId)}`)} />
+                  </div>
+                ));
+              })()}
             </div>
+
+            {/* Pagination controls */}
+            {(() => {
+              const total = builds.length;
+              const pages = Math.max(1, Math.ceil(total / PER_PAGE));
+              const current = Math.min(Math.max(1, managePage || 1), pages);
+              const startIndex = total === 0 ? 0 : (current - 1) * PER_PAGE + 1;
+              const endIndex = Math.min(total, current * PER_PAGE);
+
+              const items = [];
+
+              // Prev button (hidden on first page)
+              if (current > 1) {
+                items.push(
+                  <button key="prev" className="btn" onClick={() => setManagePage(current - 1)}>Prev</button>
+                );
+              }
+
+              for (let p = 1; p <= pages; p++) {
+                const isActive = p === current;
+                items.push(
+                  <button
+                    key={p}
+                    onClick={() => setManagePage(p)}
+                    aria-current={isActive || undefined}
+                    className={`btn ${isActive ? 'pager-active' : ''}`}
+                  >
+                    {p}
+                  </button>
+                );
+              }
+
+              // Next button (hidden on last page)
+              if (current < pages) {
+                items.push(
+                  <button key="next" className="btn" onClick={() => setManagePage(current + 1)}>Next</button>
+                );
+              }
+
+              return (
+                <>
+                  <div className="pager" style={{ justifyContent: 'center', marginTop: 18 }}>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>{items}</div>
+                  </div>
+
+                  {/* Summary below the pager */}
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <div className="pager-summary" style={{ marginTop: 8 }}>
+                      {`Showing ${startIndex}–${endIndex} of ${total} ${total === 1 ? 'build' : 'builds'}`}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
+            </>
           )}
         </div>
       )}
